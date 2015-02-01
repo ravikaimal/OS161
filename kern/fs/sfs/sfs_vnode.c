@@ -255,6 +255,7 @@ sfs_bmap(struct sfs_vnode *sv, uint32_t fileblock, int doalloc,
 		 * We already have an indirect block allocated; load it.
 		 */
 		result = sfs_rblock(sfs, idbuf, idblock);
+		DEBUG(DB_VM, "Indirect Block %d",result);
 		if (result) {
 			return result;
 		}
@@ -332,6 +333,7 @@ sfs_partialio(struct sfs_vnode *sv, struct uio *uio,
 
 	/* Get the disk block number */
 	result = sfs_bmap(sv, fileblock, doalloc, &diskblock);
+	DEBUG(DB_VM, "Disk Block Number %d",result);
 	if (result) {
 		return result;
 	}

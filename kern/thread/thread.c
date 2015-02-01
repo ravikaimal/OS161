@@ -123,6 +123,7 @@ thread_create(const char *name)
 
 	thread = kmalloc(sizeof(*thread));
 	if (thread == NULL) {
+		DEBUG(DB_VM, "Memory Allocation failed for the thread");
 		return NULL;
 	}
 
@@ -486,6 +487,7 @@ thread_fork(const char *name,
 
 	newthread = thread_create(name);
 	if (newthread == NULL) {
+		DEBUG(DB_VM, "Out of Memory");
 		return ENOMEM;
 	}
 

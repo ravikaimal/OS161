@@ -58,6 +58,7 @@ vfs_getcurdir(struct vnode **ret)
 		*ret = curthread->t_cwd;
 	}
 	else {
+		DEBUG(DB_VM, "The specified directory does not exist");
 		rv = ENOENT;
 	}
 
@@ -80,6 +81,7 @@ vfs_setcurdir(struct vnode *dir)
 		return result;
 	}
 	if (vtype != S_IFDIR) {
+		DEBUG(DB_VM, "Not a directory");
 		return ENOTDIR;
 	}
 
@@ -124,6 +126,7 @@ vfs_chdir(char *path)
 	int result;
 
 	result = vfs_lookup(path, &vn);
+	DEBUG(DB_VM, "Result VFS Lookup %d",result);
 	if (result) {
 		return result;
 	}

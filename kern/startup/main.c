@@ -205,6 +205,8 @@ sys_reboot(int code)
 void
 kmain(char *arguments)
 {
+	kprintf("rpirakil@buffalo.edu\n");
+	kprintf("sbedi2@buffalo.edu\n");
 	boot();
 
 	menu(arguments);

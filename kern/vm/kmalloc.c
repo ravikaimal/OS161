@@ -240,6 +240,7 @@ checksubpage(struct pageref *pr)
 		KASSERT(fla < MIPS_KSEG1);
 		nfree++;
 	}
+	DEBUG(DB_VM, "Total Freed %d",nfree);
 	KASSERT(nfree==pr->nfree);
 }
 #else
@@ -479,6 +480,8 @@ subpage_kmalloc(size_t sz)
 
 	pr->pageaddr_and_blocktype = MKPAB(prpage, blktype);
 	pr->nfree = PAGE_SIZE / sizes[blktype];
+	
+	DEBUG(DB_VM, "pr->nfree %d",pr->nfree);
 
 	/*
 	 * Note: fl is volatile because the MIPS toolchain we were

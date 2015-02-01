@@ -72,6 +72,7 @@ spinlock_cleanup(struct spinlock *lk)
 void
 spinlock_acquire(struct spinlock *lk)
 {
+	DEBUG(DB_VM, "Acquiring lock");
 	struct cpu *mycpu;
 
 	splraise(IPL_NONE, IPL_HIGH);
