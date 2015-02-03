@@ -162,8 +162,14 @@ lock_create(const char *name)
                 kfree(lock);
                 return NULL;
         }
-        
-        // add stuff here as needed
+	lock->lk_wchan = wchan_create(lock->lk_name);
+	if (lock->lk_wchan == NULL) {
+		kfree(lock->lk_name);
+		kfree(lock);
+		return NULL;
+	}
+	lk_is_locked=false;
+       // add stuff here as needed
         
         return lock;
 }
@@ -172,7 +178,7 @@ void
 lock_destroy(struct lock *lock)
 {
         KASSERT(lock != NULL);
-
+	wchan_destroy(lock->lk_wchan);
         // add stuff here as needed
         
         kfree(lock->lk_name);
@@ -183,7 +189,13 @@ void
 lock_acquire(struct lock *lock)
 {
         // Write this
-
+	 if(lk_is_locked == false){      //set locked to true. Register current process ID.
+                lk_is_locked=true;
+                //set to owner here
+        }
+        else{                           //Sleep
+                wchan_sleep(lock->lk_wchan);
+        }
         (void)lock;  // suppress warning until code gets written
 }
 
@@ -191,7 +203,8 @@ void
 lock_release(struct lock *lock)
 {
         // Write this
-
+	lk_is_locked=false;
+	wchan_wakeone(lock->lk_wchan);
         (void)lock;  // suppress warning until code gets written
 }
 
