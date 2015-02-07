@@ -150,72 +150,81 @@ V(struct semaphore *sem)
 struct lock *
 lock_create(const char *name)
 {
-        struct lock *lock;
+	struct lock *lock;
 
-        lock = kmalloc(sizeof(struct lock));
-        if (lock == NULL) {
-                return NULL;
-        }
+    lock = kmalloc(sizeof(struct lock));
+	if (lock == NULL) {
+			return NULL;
+	}
 
-        lock->lk_name = kstrdup(name);
-        if (lock->lk_name == NULL) {
-                kfree(lock);
-                return NULL;
-        }
+	lock->lk_name = kstrdup(name);
+	if (lock->lk_name == NULL) {
+			kfree(lock);
+			return NULL;
+	}
 	lock->lk_wchan = wchan_create(lock->lk_name);
 	if (lock->lk_wchan == NULL) {
 		kfree(lock->lk_name);
 		kfree(lock);
 		return NULL;
 	}
-	lk_is_locked=false;
+	lock->lk_is_locked=false;
+	lock->lk_lock_holder = NULL ;
+	spinlock_init(&lock->lk_lock);
+	lock->lk_is_locked=false;
        // add stuff here as needed
         
-        return lock;
+    return lock;
 }
 
 void
 lock_destroy(struct lock *lock)
 {
-        KASSERT(lock != NULL);
-	wchan_destroy(lock->lk_wchan);
-        // add stuff here as needed
-        
-        kfree(lock->lk_name);
-        kfree(lock);
+    KASSERT(lock != NULL);
+    spinlock_cleanup(&lock->lk_lock);
+    lock->lk_lock_holder = NULL ;
+    lock->lk_is_locked=false;
+    wchan_destroy(lock->lk_wchan);
+    // add stuff here as needed
+
+    kfree(lock->lk_name);
+    kfree(lock);
 }
 
 void
 lock_acquire(struct lock *lock)
 {
         // Write this
-	 if(lk_is_locked == false){      //set locked to true. Register current process ID.
-                lk_is_locked=true;
-                //set to owner here
+		spinlock_acquire(&lock->lk_lock);
+        while (lock->lk_is_locked) {
+        	wchan_lock(lock->lk_wchan);
+        	spinlock_release(&lock->lk_lock);
+            wchan_sleep(lock->lk_wchan);
+            spinlock_acquire(&lock->lk_lock);
         }
-        else{                           //Sleep
-                wchan_sleep(lock->lk_wchan);
-        }
-        (void)lock;  // suppress warning until code gets written
+        lock->lk_is_locked = true ;
+        lock->lk_lock_holder = curthread ;
+        spinlock_release(&lock->lk_lock);
 }
 
 void
 lock_release(struct lock *lock)
 {
-        // Write this
-	lk_is_locked=false;
-	wchan_wakeone(lock->lk_wchan);
-        (void)lock;  // suppress warning until code gets written
+    // Write this
+	spinlock_acquire(&lock->lk_lock);
+
+	if(lock_do_i_hold(lock)){
+		wchan_wakeone(lock->lk_wchan);
+		lock->lk_is_locked=false;
+		lock->lk_lock_holder=NULL;
+	}
+	spinlock_release(&lock->lk_lock);
 }
 
 bool
 lock_do_i_hold(struct lock *lock)
 {
-        // Write this
-
-        (void)lock;  // suppress warning until code gets written
-
-        return true; // dummy until code gets written
+    return (lock->lk_lock_holder == curthread) ;
 }
 
 ////////////////////////////////////////////////////////////

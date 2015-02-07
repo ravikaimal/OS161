@@ -73,9 +73,11 @@ void V(struct semaphore *);
  * (should be) made internally.
  */
 struct lock {
-        char *lk_name;
+    char *lk_name;
 	struct wchan *lk_wchan;
 	bool lk_is_locked;
+	struct spinlock lk_lock;
+	struct thread *lk_lock_holder ;
 	//spinlock?
 	//ID to identify thread
         // add what you need here
