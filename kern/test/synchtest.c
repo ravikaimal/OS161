@@ -42,14 +42,18 @@
 #define NLOCKLOOPS    120
 #define NCVLOOPS      5
 #define NTHREADS      32
+#define NRWTHREADS      10
+#define NRWLOOPS      5
 
 static volatile unsigned long testval1;
 static volatile unsigned long testval2;
 static volatile unsigned long testval3;
+static volatile unsigned long testval4;
 static struct semaphore *testsem;
 static struct lock *testlock;
 static struct cv *testcv;
 static struct semaphore *donesem;
+static struct rwlock *testrwlock;
 
 static
 void
@@ -77,6 +81,13 @@ inititems(void)
 		donesem = sem_create("donesem", 0);
 		if (donesem == NULL) {
 			panic("synchtest: sem_create failed\n");
+		}
+	}
+	if (testrwlock==NULL) {
+		testrwlock = rwlock_create("testrwlock");
+		kprintf("testrwlock created\n") ;
+		if (testrwlock == NULL) {
+			panic("synchtest: rwlock_create failed\n");
 		}
 	}
 }
@@ -354,6 +365,95 @@ cvtest2(int nargs, char **args)
 	}
 
 	kprintf("CV test done\n");
+
+	return 0;
+}
+
+static
+void
+readtestthread(void *junk, unsigned long num)
+{
+	int i;
+	(void)junk;
+	unsigned long localtestval ;
+	int j ;
+
+	for (i=0; i<NRWLOOPS; i++) {
+		rwlock_acquire_read(testrwlock);
+		kprintf("Lock Acquired for Read Thread %lu \n", num);
+		localtestval = testval4 ;
+		//Empty loop to pass time. No other thread should modify the value in this time.
+		for(j=0 ; j<3000 ;j++) ;
+
+		//assert operation to verify whether the value has been changed after the lock is acquired.
+		KASSERT(localtestval == testval4);
+		kprintf("Read Thread %lu : Read Value %lu \n", num, testval4);
+		kprintf("Lock Released for Read Thread %lu \n", num);
+		rwlock_release_read(testrwlock);
+	}
+	V(donesem);
+}
+static
+void
+writetestthread(void *junk, unsigned long num)
+{
+	int i;
+	(void)junk;
+	int j ;
+	unsigned long localtestval ;
+
+	for (i=0; i<NRWLOOPS; i++) {
+		rwlock_acquire_write(testrwlock);
+		kprintf("Lock Acquired for Write Thread %lu \n", num);
+		testval4++ ;
+		localtestval = testval4;
+		//Empty loop to pass time. No other thread should modify the value in this time.
+		for(j=0 ; j<3000 ;j++) ;
+		//assert operation to verify whether the value has been changed after this thread has modified it.
+		KASSERT(localtestval == testval4);
+		kprintf("Lock Released for Write Thread %lu \n", num);
+		rwlock_release_write(testrwlock);
+	}
+	V(donesem);
+}
+int
+rwtest(int nargs, char **args)
+{
+	int i, result;
+
+	(void)nargs;
+	(void)args;
+
+	inititems();
+	kprintf("Starting RW lock test...\n");
+
+	for (i=0; i<NRWTHREADS; i++) {
+		if(i%2 == 0){
+			kprintf("Reader %d created.\n",i);
+			result = thread_fork("synchtest", readtestthread, NULL, i,
+						 NULL);
+			if (result) {
+				panic("rwlocktest: thread_fork failed: %s\n",
+					  strerror(result));
+			}
+		}
+		else
+		{
+			kprintf("Writer %d created.\n",i);
+			result = thread_fork("synchtest", writetestthread, NULL, i,
+						 NULL);
+			if (result) {
+				panic("rwlocktest: thread_fork failed: %s\n",
+					  strerror(result));
+			}
+		}
+	}
+
+	for (i=0; i<NRWTHREADS; i++) {
+		P(donesem);
+	}
+	kprintf("RW Lock test done.\n");
+
 
 	return 0;
 }

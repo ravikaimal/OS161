@@ -119,12 +119,12 @@ void lock_destroy(struct lock *);
 
 struct cv {
         char *cv_name;
-        // add what you need here
-        // (don't forget to mark things volatile as needed)
+        struct wchan *cv_wchan;
 };
 
 struct cv *cv_create(const char *name);
 void cv_destroy(struct cv *);
+
 
 /*
  * Operations:
@@ -149,6 +149,17 @@ void cv_broadcast(struct cv *cv, struct lock *lock);
 
 struct rwlock {
         char *rwlock_name;
+        struct wchan *rw_reader_wchan;
+        struct wchan *rw_writer_wchan;
+        struct cv *cv ;
+        struct lock *lock ;
+        volatile int rw_readerCount ;//Should we declare it as volatile?
+        bool rw_isLockHolderWriter ;
+        volatile int rw_writerWaitCount ;
+        volatile int rw_readerWaitCount ;
+        //bool rw_isWriterWaiting ;
+        //bool rw_isReaderWaiting ;
+        //struct spinlock rw_wr_lock;
 };
 
 struct rwlock * rwlock_create(const char *);
@@ -158,5 +169,9 @@ void rwlock_acquire_read(struct rwlock *);
 void rwlock_release_read(struct rwlock *);
 void rwlock_acquire_write(struct rwlock *);
 void rwlock_release_write(struct rwlock *);
+bool does_writer_hold_lock(struct rwlock *) ;
+bool does_reader_hold_lock(struct rwlock *) ;
+bool is_reader_waiting(struct rwlock *) ;
+bool is_writer_waiting(struct rwlock *) ;
 
 #endif /* _SYNCH_H_ */
