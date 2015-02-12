@@ -46,8 +46,27 @@
 // 13 Feb 2012 : GWA : Adding at the suggestion of Isaac Elbaz. These
 // functions will allow you to do local initialization. They are called at
 // the top of the corresponding driver code.
+struct whale{
+	volatile int maleCount ;
+	volatile int femaleCount ;
+	volatile int matchMakerCount ;
 
+	struct cv *cv ;
+	struct lock *malelock ;
+	struct lock *femalelock ;
+	struct lock *matchMakerlock ;
+};
+
+struct whale *whale ;
 void whalemating_init() {
+  whale = kmalloc(sizeof(struct whale));
+	whale->maleCount = 0 ;
+	whale->femaleCount = 0 ;
+	whale->matchMakerCount = 0 ;
+	whale->cv = cv_create("whalecv") ;
+	whale->malelock = lock_create("malelock") ;
+	whale->femalelock = lock_create("femalelock") ;
+	whale->matchMakerlock = lock_create("matchMakerlock") ;
   return;
 }
 
@@ -55,6 +74,14 @@ void whalemating_init() {
 // care if your problems leak memory, but if you do, use this to clean up.
 
 void whalemating_cleanup() {
+  whale->maleCount = 0 ;
+	whale->femaleCount = 0 ;
+	whale->matchMakerCount = 0 ;
+	cv_destroy(whale->cv) ;
+	lock_destroy(whale->malelock) ;
+	lock_destroy(whale->femalelock) ;
+	lock_destroy(whale->matchMakerlock) ;
+	kfree(whale) ;
   return;
 }
 
@@ -65,8 +92,16 @@ male(void *p, unsigned long which)
   (void)which;
   
   male_start();
-	// Implement this function 
+  lock_acquire(whale->malelock) ;
+  whale->maleCount++ ;
+
+  while(whale->femaleCount == 0 || whale->matchMakerCount == 0  ){
+	cv_wait(whale->cv,whale->malelock) ;
+  }
+  cv_broadcast(whale->cv,whale->malelock) ;
   male_end();
+  whale->maleCount-- ;
+  lock_release(whale->malelock) ;
 
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // whalemating driver can return to the menu cleanly.
@@ -81,8 +116,18 @@ female(void *p, unsigned long which)
   (void)which;
   
   female_start();
-	// Implement this function 
+lock_acquire(whale->femalelock) ;
+  whale->femaleCount++ ;
+
+  while(whale->maleCount == 0 || whale->matchMakerCount == 0){
+
+	  cv_wait(whale->cv,whale->femalelock) ;
+
+  }
+  cv_broadcast(whale->cv,whale->femalelock) ;
   female_end();
+  whale->femaleCount-- ;
+  lock_release(whale->femalelock) ;
   
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // whalemating driver can return to the menu cleanly.
@@ -97,8 +142,15 @@ matchmaker(void *p, unsigned long which)
   (void)which;
   
   matchmaker_start();
-	// Implement this function 
+  lock_acquire(whale->matchMakerlock) ;
+  whale->matchMakerCount++ ;
+  while(whale->maleCount == 0 || whale->femaleCount == 0){
+	  cv_wait(whale->cv,whale->matchMakerlock) ;
+  }
+  cv_broadcast(whale->cv,whale->matchMakerlock) ;
   matchmaker_end();
+  whale->matchMakerCount-- ;
+  lock_release(whale->matchMakerlock) ;
   
   // 08 Feb 2012 : GWA : Please do not change this code. This is so that your
   // whalemating driver can return to the menu cleanly.
