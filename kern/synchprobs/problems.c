@@ -71,6 +71,11 @@ struct intersection{
 	struct lock *lock_1;
 	struct lock *lock_2;
 	struct lock *lock_3;
+
+	bool is0Locked ;
+	bool is1Locked ;
+	bool is2Locked ;
+	bool is3Locked ;
 };
 
 struct intersection *intersection ;
@@ -81,6 +86,8 @@ int getIntersectionWaitCount(unsigned long);
 void incrementIntersectionWaitCount(unsigned long);
 void decrementIntersectionWaitCount(unsigned long);
 struct lock* getIntersectionLock(unsigned long);
+bool getLockStatus(unsigned long );
+void setLockStatus(unsigned long ,bool );
 
 void whalemating_init() {
 	whale = kmalloc(sizeof(struct whale));
@@ -227,6 +234,12 @@ void stoplight_init() {
 	intersection->quad2WaitCount = 0 ;
 	intersection->quad3WaitCount = 0 ;
 
+	intersection->is0Locked  = false;
+	intersection->is1Locked = false;
+	intersection->is2Locked = false;
+	intersection->is3Locked = false;
+
+
 	intersection->cv = cv_create("intersection cv") ;
 	return;
 }
@@ -239,6 +252,10 @@ void stoplight_cleanup() {
 	intersection->quad1WaitCount = 0 ;
 	intersection->quad2WaitCount = 0 ;
 	intersection->quad3WaitCount = 0 ;
+	intersection->is0Locked  = false;
+	intersection->is1Locked = false;
+	intersection->is2Locked = false;
+	intersection->is3Locked = false;
 
 	cv_destroy(intersection->cv) ;
 
@@ -255,28 +272,54 @@ void stoplight_cleanup() {
 void
 gostraight(void *p, unsigned long direction)
 {
+	//kprintf("gostraight : entry\n") ;
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
 	(void)direction;
 
+	//struct lock *lck = getIntersectionLock((direction+3)%4);
+
 	get_lock(direction) ;
-	while (getIntersectionWaitCount(direction) > 0 &&  getIntersectionWaitCount((direction+3)%4) > 0)
+	setLockStatus(direction,true) ;
+	while (getIntersectionWaitCount(direction) > 0 ||  getIntersectionWaitCount((direction+3)%4) > 0)
 	{
 		incrementIntersectionWaitCount(direction) ;
+		setLockStatus(direction,false) ;
 		cv_wait(intersection->cv,getIntersectionLock(direction)) ;
+		setLockStatus(direction,true) ;
 		decrementIntersectionWaitCount(direction) ;
 	}
 
-	get_lock((direction+3)%4);
+	while(1)
+	{
+		if (getLockStatus((direction+3)%4))
+		{
+			incrementIntersectionWaitCount(direction) ;
+			setLockStatus(direction,false) ;
+			cv_wait(intersection->cv,getIntersectionLock(direction)) ;
+			setLockStatus(direction,true) ;
+			decrementIntersectionWaitCount(direction) ;
+		}else{
+
+			get_lock((direction+3)%4);
+			setLockStatus((direction+3)%4,true) ;
+			break ;
+		}
+	}
+
 
 	inQuadrant(direction);
 	inQuadrant((direction+3)%4);
-	cv_broadcast(intersection->cv,getIntersectionLock(direction)) ;
+	cv_signal(intersection->cv,getIntersectionLock(direction)) ;
 	give_lock(direction);
+	setLockStatus(direction,false) ;
+
+	give_lock((direction+3)%4);
+	setLockStatus((direction+3)%4,false) ;
 
 	leaveIntersection();
 
-	give_lock((direction+3)%4);
 
+	//kprintf("gostraight : exit\n") ;
 	V(stoplightMenuSemaphore);
 	return;
 }
@@ -286,32 +329,50 @@ gostraight(void *p, unsigned long direction)
 void
 turnleft(void *p, unsigned long direction)
 {
+	//kprintf("turnleft : entry\n") ;
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
 	(void)direction;
 	get_lock(direction);
 
-	while (getIntersectionWaitCount(direction) > 0 &&  getIntersectionWaitCount((direction+3)%4) > 0 && getIntersectionWaitCount((direction+2)%4) > 0)
+	struct lock *lck1 = getIntersectionLock((direction+3)%4);
+	struct lock *lck2 = getIntersectionLock((direction+2)%4);
+
+	while ((getIntersectionWaitCount(direction) > 0 &&  getIntersectionWaitCount((direction+3)%4) > 0 && getIntersectionWaitCount((direction+2)%4) > 0)	 )
 	{
 		incrementIntersectionWaitCount(direction) ;
 		cv_wait(intersection->cv,getIntersectionLock(direction)) ;
 		decrementIntersectionWaitCount(direction) ;
 	}
 
-	get_lock((direction+3)%4);
-	get_lock((direction+2)%4);
+	while(1)
+	{
+		if (lck1->lk_is_locked || lck2->lk_is_locked)
+		{
+			incrementIntersectionWaitCount(direction) ;
+
+			cv_wait(intersection->cv,getIntersectionLock(direction)) ;
+			decrementIntersectionWaitCount(direction) ;
+		}else{
+			get_lock((direction+3)%4);
+			get_lock((direction+2)%4);
+			break ;
+		}
+	}
 
 	inQuadrant(direction);
 
 	inQuadrant((direction+3)%4);
-	cv_broadcast(intersection->cv,getIntersectionLock(direction)) ;
+	cv_signal(intersection->cv,getIntersectionLock(direction)) ;
 	give_lock(direction);
 
 	inQuadrant((direction+2)%4);
 	give_lock((direction+3)%4);
 
+	give_lock((direction+2)%4);
+
 	leaveIntersection();
 
-	give_lock((direction+2)%4);
+	//kprintf("turnleft : exit\n") ;
 
 	// 08 Feb 2012 : GWA : Please do not change this code. This is so that your
 	// stoplight driver can return to the menu cleanly.
@@ -322,8 +383,10 @@ turnleft(void *p, unsigned long direction)
 void
 turnright(void *p, unsigned long direction)
 {
+	//kprintf("turnright : entry\n") ;
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
 	(void)direction;
+
 
 	get_lock(direction);
 
@@ -335,9 +398,11 @@ turnright(void *p, unsigned long direction)
 	}
 
 	inQuadrant(direction);
+	cv_signal(intersection->cv,getIntersectionLock(direction)) ;
 	leaveIntersection();
-	cv_broadcast(intersection->cv,getIntersectionLock(direction)) ;
 	give_lock(direction);
+	//kprintf("turnright : exit\n") ;
+
 
 	// 08 Feb 2012 : GWA : Please do not change this code. This is so that your
 	// stoplight driver can return to the menu cleanly.
@@ -380,6 +445,30 @@ int getIntersectionWaitCount(unsigned long direction)
 	}
 
 	return 0 ;
+}
+
+bool getLockStatus(unsigned long direction)
+{
+	switch(direction)
+	{
+	case 0:return intersection->is0Locked ;
+	case 1:return intersection->is1Locked ;
+	case 2:return intersection->is2Locked ;
+	case 3:return intersection->is3Locked ;
+	}
+
+	return false ;
+}
+
+void setLockStatus(unsigned long direction,bool value)
+{
+	switch(direction)
+	{
+	case 0:intersection->is0Locked = value  ; break ;
+	case 1:intersection->is1Locked = value  ; break ;
+	case 2:intersection->is2Locked = value  ; break ;
+	case 3:intersection->is3Locked = value  ; break ;
+	}
 }
 
 void incrementIntersectionWaitCount(unsigned long direction)
