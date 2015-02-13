@@ -35,6 +35,8 @@
 #include <thread.h>
 #include <test.h>
 #include <synch.h>
+#include <current.h>
+#include <wchan.h>
 
 /*
  * 08 Feb 2012 : GWA : Driver code is in kern/synchprobs/driver.c. We will
@@ -65,12 +67,17 @@ struct intersection{
 	volatile int quad2WaitCount ;
 	volatile int quad3WaitCount ;
 
-	struct cv *cv ;
+	//struct cv *cv ;
 
 	struct lock *lock_0;
 	struct lock *lock_1;
 	struct lock *lock_2;
 	struct lock *lock_3;
+
+	struct wchan *wchan0 ;
+	struct wchan *wchan1 ;
+	struct wchan *wchan2 ;
+	struct wchan *wchan3 ;
 
 	bool is0Locked ;
 	bool is1Locked ;
@@ -88,6 +95,10 @@ void decrementIntersectionWaitCount(unsigned long);
 struct lock* getIntersectionLock(unsigned long);
 bool getLockStatus(unsigned long );
 void setLockStatus(unsigned long ,bool );
+void sleep_wchan(unsigned long ) ;
+void wake_wchan(unsigned long ) ;
+void get_locks(unsigned long , unsigned long ,unsigned long ) ;
+void give_locks(unsigned long , unsigned long ,unsigned long ) ;
 
 void whalemating_init() {
 	whale = kmalloc(sizeof(struct whale));
@@ -239,8 +250,13 @@ void stoplight_init() {
 	intersection->is2Locked = false;
 	intersection->is3Locked = false;
 
+	intersection->wchan0 = wchan_create("waitchannel 0") ;
+	intersection->wchan1 = wchan_create("waitchannel 1") ;
+	intersection->wchan2 = wchan_create("waitchannel 2") ;
+	intersection->wchan3 = wchan_create("waitchannel 3") ;
 
-	intersection->cv = cv_create("intersection cv") ;
+
+	//intersection->cv = cv_create("intersection cv") ;
 	return;
 }
 
@@ -257,7 +273,11 @@ void stoplight_cleanup() {
 	intersection->is2Locked = false;
 	intersection->is3Locked = false;
 
-	cv_destroy(intersection->cv) ;
+//	cv_destroy(intersection->cv) ;
+	wchan_destroy(intersection->wchan0) ;
+	wchan_destroy(intersection->wchan1) ;
+	wchan_destroy(intersection->wchan2) ;
+	wchan_destroy(intersection->wchan3) ;
 
 	lock_destroy(intersection->lock_0);
 	lock_destroy(intersection->lock_1);
@@ -275,56 +295,42 @@ gostraight(void *p, unsigned long direction)
 	//kprintf("gostraight : entry\n") ;
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
 	(void)direction;
+	unsigned long nextdirection = (direction+3)%4 ;
 
-	//struct lock *lck = getIntersectionLock((direction+3)%4);
-
-	get_lock(direction) ;
-	setLockStatus(direction,true) ;
-	while (getIntersectionWaitCount(direction) > 0 ||  getIntersectionWaitCount((direction+3)%4) > 0)
-	{
-		incrementIntersectionWaitCount(direction) ;
-		setLockStatus(direction,false) ;
-		cv_wait(intersection->cv,getIntersectionLock(direction)) ;
-		setLockStatus(direction,true) ;
-		decrementIntersectionWaitCount(direction) ;
-	}
-
-	while(1)
-	{
-		if (getLockStatus((direction+3)%4))
-		{
-			incrementIntersectionWaitCount(direction) ;
-			setLockStatus(direction,false) ;
-			cv_wait(intersection->cv,getIntersectionLock(direction)) ;
-			setLockStatus(direction,true) ;
-			decrementIntersectionWaitCount(direction) ;
-		}else{
-
-			get_lock((direction+3)%4);
-			setLockStatus((direction+3)%4,true) ;
-			break ;
-		}
-	}
-
+	get_locks(direction,nextdirection,5) ;
 
 	inQuadrant(direction);
-	inQuadrant((direction+3)%4);
-	cv_signal(intersection->cv,getIntersectionLock(direction)) ;
-	give_lock(direction);
-	setLockStatus(direction,false) ;
-
-	give_lock((direction+3)%4);
-	setLockStatus((direction+3)%4,false) ;
+	inQuadrant(nextdirection);
 
 	leaveIntersection();
 
+	give_locks(direction,nextdirection,5) ;
 
-	//kprintf("gostraight : exit\n") ;
 	V(stoplightMenuSemaphore);
 	return;
 }
 
+void sleep_wchan(unsigned long direction)
+{
+	switch(direction)
+	{
+	case 0 : wchan_lock(intersection->wchan0) ; wchan_sleep(intersection->wchan0) ;  break;
+	case 1 : wchan_lock(intersection->wchan1) ; wchan_sleep(intersection->wchan1) ;  break;
+	case 2 : wchan_lock(intersection->wchan2) ; wchan_sleep(intersection->wchan2) ;  break;
+	case 3 : wchan_lock(intersection->wchan3) ; wchan_sleep(intersection->wchan3) ;  break;
+	}
+}
 
+void wake_wchan(unsigned long direction)
+{
+	switch(direction)
+	{
+	case 0 : wchan_wakeone(intersection->wchan0) ;  break;
+	case 1 : wchan_wakeone(intersection->wchan1) ;  break;
+	case 2 : wchan_wakeone(intersection->wchan2) ;  break;
+	case 3 : wchan_wakeone(intersection->wchan3) ;  break;
+	}
+}
 
 void
 turnleft(void *p, unsigned long direction)
@@ -332,45 +338,18 @@ turnleft(void *p, unsigned long direction)
 	//kprintf("turnleft : entry\n") ;
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
 	(void)direction;
-	get_lock(direction);
+	unsigned long nextdirection = (direction+3)%4 ;
+	unsigned long nexttonextdirection = (direction+2)%4 ;
 
-	struct lock *lck1 = getIntersectionLock((direction+3)%4);
-	struct lock *lck2 = getIntersectionLock((direction+2)%4);
-
-	while ((getIntersectionWaitCount(direction) > 0 &&  getIntersectionWaitCount((direction+3)%4) > 0 && getIntersectionWaitCount((direction+2)%4) > 0)	 )
-	{
-		incrementIntersectionWaitCount(direction) ;
-		cv_wait(intersection->cv,getIntersectionLock(direction)) ;
-		decrementIntersectionWaitCount(direction) ;
-	}
-
-	while(1)
-	{
-		if (lck1->lk_is_locked || lck2->lk_is_locked)
-		{
-			incrementIntersectionWaitCount(direction) ;
-
-			cv_wait(intersection->cv,getIntersectionLock(direction)) ;
-			decrementIntersectionWaitCount(direction) ;
-		}else{
-			get_lock((direction+3)%4);
-			get_lock((direction+2)%4);
-			break ;
-		}
-	}
+	get_locks(direction,nextdirection,nexttonextdirection) ;
 
 	inQuadrant(direction);
-
-	inQuadrant((direction+3)%4);
-	cv_signal(intersection->cv,getIntersectionLock(direction)) ;
-	give_lock(direction);
-
-	inQuadrant((direction+2)%4);
-	give_lock((direction+3)%4);
-
-	give_lock((direction+2)%4);
+	inQuadrant(nextdirection);
+	inQuadrant(nexttonextdirection);
 
 	leaveIntersection();
+
+	give_locks(direction,nextdirection,nexttonextdirection) ;
 
 	//kprintf("turnleft : exit\n") ;
 
@@ -387,21 +366,14 @@ turnright(void *p, unsigned long direction)
 	struct semaphore * stoplightMenuSemaphore = (struct semaphore *)p;
 	(void)direction;
 
-
-	get_lock(direction);
-
-	while (getIntersectionWaitCount(direction) > 0)
-	{
-		incrementIntersectionWaitCount(direction) ;
-		cv_wait(intersection->cv,getIntersectionLock(direction)) ;
-		decrementIntersectionWaitCount(direction) ;
-	}
+	get_locks(direction,5,5) ;
 
 	inQuadrant(direction);
-	cv_signal(intersection->cv,getIntersectionLock(direction)) ;
+
 	leaveIntersection();
-	give_lock(direction);
-	//kprintf("turnright : exit\n") ;
+
+	give_locks(direction,5,5) ;
+
 
 
 	// 08 Feb 2012 : GWA : Please do not change this code. This is so that your
@@ -409,6 +381,140 @@ turnright(void *p, unsigned long direction)
 	V(stoplightMenuSemaphore);
 	return;
 }
+
+void get_locks(unsigned long direction1, unsigned long direction2,unsigned long direction3)
+{
+	unsigned long order1 ;
+	unsigned long order2 ;
+	unsigned long order3 ;
+	//kprintf("US %lu,%lu,%lu\n",direction1,direction2,direction3) ;
+	if (direction1 < direction2)
+	{
+		if (direction1 < direction3)
+		{
+			order1 = direction1 ;
+			if (direction2 < direction3)
+			{
+				order2 = direction2 ;
+				order3 = direction3 ;
+
+			}
+			else
+			{
+				order2 = direction3 ;
+				order3 = direction2 ;
+			}
+		}
+		else
+		{
+			order1 = direction3 ;
+			order2 = direction1 ;
+			order3 = direction2 ;
+		}
+	}
+	else if (direction1 < direction3)
+	{
+		if (direction2 < direction3)
+		{
+			order1 = direction2 ;
+			order2 = direction1 ;
+			order3 = direction3 ;
+
+		}
+		else
+		{
+			order1 = direction2 ;
+			order2 = direction3 ;
+			order3 = direction1 ;
+		}
+	}
+	else
+	{
+		order1 = direction3 ;
+		order2 = direction2 ;
+		order3 = direction1 ;
+	}
+
+	//kprintf("SO %lu,%lu,%lu\n",order1,order2,order3) ;
+	get_lock(order1) ;
+	if (order2 != 5)
+	{
+		get_lock(order2) ;
+	}
+
+	if (order3 != 5)
+	{
+		get_lock(order3) ;
+	}
+
+}
+
+void give_locks(unsigned long direction1, unsigned long direction2,unsigned long direction3)
+{
+	unsigned long order1 ;
+	unsigned long order2 ;
+	unsigned long order3 ;
+	if (direction1 < direction2)
+	{
+		if (direction1 < direction3)
+		{
+			order1 = direction1 ;
+			if (direction2 < direction3)
+			{
+				order2 = direction2 ;
+				order3 = direction3 ;
+
+			}
+			else
+			{
+				order2 = direction3 ;
+				order3 = direction2 ;
+			}
+		}
+		else
+		{
+			order1 = direction3 ;
+			order2 = direction1 ;
+			order3 = direction2 ;
+		}
+	}
+	else if (direction1 < direction3)
+	{
+		if (direction2 < direction3)
+		{
+			order1 = direction2 ;
+			order2 = direction1 ;
+			order3 = direction3 ;
+
+		}
+		else
+		{
+			order1 = direction2 ;
+			order2 = direction3 ;
+			order3 = direction1 ;
+		}
+	}
+	else
+	{
+		order1 = direction3 ;
+		order2 = direction2 ;
+		order3 = direction1 ;
+	}
+
+
+	give_lock(order1) ;
+	if (order2 != 5)
+	{
+		give_lock(order2) ;
+	}
+
+	if (order3 != 5)
+	{
+		give_lock(order3) ;
+	}
+
+}
+
 
 void get_lock(unsigned long direction)
 {
