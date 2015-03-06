@@ -35,6 +35,7 @@
 #include <thread.h>
 #include <current.h>
 #include <syscall.h>
+#include <kern/filesyscalls.h>
 
 
 /*
@@ -99,20 +100,52 @@ syscall(struct trapframe *tf)
 
 	retval = 0;
 
+//	kprintf("\nCall No : %d ",callno) ;
 	switch (callno) {
-	    case SYS_reboot:
+	case SYS_reboot:
 		err = sys_reboot(tf->tf_a0);
 		break;
 
-	    case SYS___time:
+	case SYS___time:
 		err = sys___time((userptr_t)tf->tf_a0,
-				 (userptr_t)tf->tf_a1);
+				(userptr_t)tf->tf_a1);
 		break;
 
-	    /* Add stuff here */
- 
-	    default:
-		kprintf("Unknown syscall %d\n", callno);
+		/* Add stuff here */
+	case SYS_open:
+		err = sys_open((userptr_t)tf->tf_a0,
+				(userptr_t)tf->tf_a1,(userptr_t)tf->tf_a2);
+		break;
+	case SYS_close:
+		err = sys_close((userptr_t)tf->tf_a0);
+		break;
+	case SYS_read:
+		err = sys_read((userptr_t)tf->tf_a0,
+				(userptr_t)tf->tf_a1,(userptr_t)tf->tf_a2);
+		break;
+	case SYS_write:
+		err = sys_write((userptr_t)tf->tf_a0,
+				(userptr_t)tf->tf_a1,(userptr_t)tf->tf_a2);
+		break;
+	case SYS_lseek:
+		err = sys_lseek((userptr_t)tf->tf_a0,
+				 (userptr_t)tf->tf_a2,(userptr_t)tf->tf_a3, (userptr_t)tf->tf_sp+16);
+		break;
+	case SYS_dup2:
+		err = sys_dup2((userptr_t)tf->tf_a0,
+				(userptr_t)tf->tf_a1);
+		break;
+	case SYS_chdir:
+		err = sys_chdir((userptr_t)tf->tf_a0);
+		break;
+	case SYS___getcwd:
+		err = sys__getcwd((userptr_t)tf->tf_a0,(userptr_t)tf->tf_a1);
+		break;
+
+
+
+	default:
+		kprintf("\nUnknown syscall %d\n", callno);
 		err = ENOSYS;
 		break;
 	}
@@ -124,20 +157,46 @@ syscall(struct trapframe *tf)
 		 * userlevel to a return value of -1 and the error
 		 * code in errno.
 		 */
-		tf->tf_v0 = err;
-		tf->tf_a3 = 1;      /* signal an error */
+//		kprintf("\nReturned Error %d",err) ;
+		if(err < 0){
+			if (callno == SYS_lseek)
+			{
+				off_t err1 = -err ;
+				off_t upper = err1 >> 32 ;
+				off_t lower = err1 & 0xffffffff ;
+				tf->tf_v0 = upper;
+				tf->tf_v1 = lower;
+//				kprintf("\n upper %d",(int)upper) ;
+//				kprintf("\n lower %d",(int)lower) ;
+				tf->tf_a3 = 0;
+			}
+			else
+			{
+				tf->tf_v0 = -err;
+				tf->tf_a3 = 0;
+			}
+		}
+		else{
+			tf->tf_v0 = err;
+			tf->tf_a3 = 1;      /* signal an error */
+		}
+
 	}
 	else {
 		/* Success. */
 		tf->tf_v0 = retval;
 		tf->tf_a3 = 0;      /* signal no error */
+		if (callno == SYS_lseek)
+		{
+			tf->tf_v1 = 0;
+		}
 	}
-	
+
 	/*
 	 * Now, advance the program counter, to avoid restarting
 	 * the syscall over and over again.
 	 */
-	
+
 	tf->tf_epc += 4;
 
 	/* Make sure the syscall code didn't forget to lower spl */
@@ -159,3 +218,5 @@ enter_forked_process(struct trapframe *tf)
 {
 	(void)tf;
 }
+
+

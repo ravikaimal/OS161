@@ -154,24 +154,25 @@ copyin(const_userptr_t usersrc, void *dest, size_t len)
 {
 	int result;
 	size_t stoplen;
-
+//	kprintf("Before copycheck\n");
 	result = copycheck(usersrc, len, &stoplen);
 	if (result) {
 		return result;
 	}
+//	kprintf("Before stoplen\n");
 	if (stoplen != len) {
 		/* Single block, can't legally truncate it. */
 		return EFAULT;
 	}
 
 	curthread->t_machdep.tm_badfaultfunc = copyfail;
-
+//	kprintf("Before stjmp\n");
 	result = setjmp(curthread->t_machdep.tm_copyjmp);
 	if (result) {
 		curthread->t_machdep.tm_badfaultfunc = NULL;
 		return EFAULT;
 	}
-
+//	kprintf("After stjmp\n");
 	memcpy(dest, (const void *)usersrc, len);
 
 	curthread->t_machdep.tm_badfaultfunc = NULL;

@@ -46,10 +46,14 @@
 #include <synch.h>
 #include <addrspace.h>
 #include <mainbus.h>
+#include <kern/fcntl.h>
+#include <vfs.h>
 #include <vnode.h>
 
 #include "opt-synchprobs.h"
 #include "opt-defaultscheduler.h"
+#include <kern/filesyscalls.h>
+
 
 
 /* Magic number used as a guard value on kernel thread stacks. */
@@ -152,6 +156,8 @@ thread_create(const char *name)
 
 	/* VFS fields */
 	thread->t_cwd = NULL;
+
+	thread->is_fd_active = false ;
 
 	/* If you add to struct thread, be sure to initialize here */
 
@@ -514,6 +520,20 @@ thread_fork(const char *name,
 		VOP_INCREF(curthread->t_cwd);
 		newthread->t_cwd = curthread->t_cwd;
 	}
+	/* Added initialization of the fd descriptor data structure - starts*/
+
+	int i = 0 ;
+
+	for (i = 0 ; i < __OPEN_MAX ; i++)
+	{
+		if (curthread->fd[i] != NULL)
+		{
+			newthread->fd[i] = curthread->fd[i] ;
+		}
+	}
+
+
+	/* Initialization of the fd descriptor data structure ends*/
 
 	/*
 	 * Because new threads come out holding the cpu runqueue lock

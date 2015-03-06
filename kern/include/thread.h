@@ -38,6 +38,7 @@
 
 #include <spinlock.h>
 #include <threadlist.h>
+#include <kern/limits.h>
 
 struct addrspace;
 struct cpu;
@@ -101,6 +102,8 @@ struct thread {
 	int t_curspl;			/* Current spl*() state */
 	int t_iplhigh_count;		/* # of times IPL has been raised */
 
+	bool is_fd_active  ;
+
 	/*
 	 * Public fields
 	 */
@@ -111,7 +114,11 @@ struct thread {
 	/* VFS */
 	struct vnode *t_cwd;		/* current working directory */
 
+	int dummy  ;
+
 	/* add more here as needed */
+	/* Added for ASST2 - to keep the file descriptors opened by a process.*/
+	struct filehandle *fd[__OPEN_MAX] ;
 };
 
 /* Call once during system startup to allocate data structures. */
