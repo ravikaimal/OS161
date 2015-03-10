@@ -31,11 +31,12 @@
 #include <kern/errno.h>
 #include <kern/syscall.h>
 #include <lib.h>
-#include <mips/trapframe.h>
 #include <thread.h>
 #include <current.h>
+#include <mips/trapframe.h>
 #include <syscall.h>
 #include <kern/filesyscalls.h>
+#include <kern/procsyscalls.h>
 
 
 /*
@@ -142,7 +143,21 @@ syscall(struct trapframe *tf)
 		err = sys__getcwd((userptr_t)tf->tf_a0,(userptr_t)tf->tf_a1);
 		break;
 
+	case SYS_fork:
+		err = (int)sys_fork(tf) ;
+		break;
 
+	case SYS_getpid:
+		err = (int)getpid() ;
+		break;
+
+	case SYS__exit:
+		sys_exit(0) ;
+		break;
+
+	case SYS_waitpid:
+		err = waitpid((int)tf->tf_a0,(int *)tf->tf_a1,(int)tf->tf_a2) ;
+		break;
 
 	default:
 		kprintf("\nUnknown syscall %d\n", callno);

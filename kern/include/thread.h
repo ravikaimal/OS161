@@ -102,7 +102,7 @@ struct thread {
 	int t_curspl;			/* Current spl*() state */
 	int t_iplhigh_count;		/* # of times IPL has been raised */
 
-	bool is_fd_active  ;
+//	bool is_fd_active  ;
 
 	/*
 	 * Public fields
@@ -114,12 +114,27 @@ struct thread {
 	/* VFS */
 	struct vnode *t_cwd;		/* current working directory */
 
-	int dummy  ;
+//	int dummy  ;
 
 	/* add more here as needed */
 	/* Added for ASST2 - to keep the file descriptors opened by a process.*/
 	struct filehandle *fd[__OPEN_MAX] ;
+
+	pid_t pid;
+
 };
+
+struct process{
+	pid_t ppid;
+	int exitcode;
+	bool exited;
+	struct lock *exit_lock;
+	struct cv *exit_cv ;
+	struct thread *currentthread ;
+
+}*process_table[__PID_MAX_LOCAL];
+
+//struct process *process_table[__PID_MAX_LOCAL];
 
 /* Call once during system startup to allocate data structures. */
 void thread_bootstrap(void);

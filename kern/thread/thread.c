@@ -53,6 +53,7 @@
 #include "opt-synchprobs.h"
 #include "opt-defaultscheduler.h"
 #include <kern/filesyscalls.h>
+#include <kern/procsyscalls.h>
 
 
 
@@ -157,7 +158,7 @@ thread_create(const char *name)
 	/* VFS fields */
 	thread->t_cwd = NULL;
 
-	thread->is_fd_active = false ;
+//	thread->is_fd_active = false ;
 
 	/* If you add to struct thread, be sure to initialize here */
 
@@ -520,20 +521,24 @@ thread_fork(const char *name,
 		VOP_INCREF(curthread->t_cwd);
 		newthread->t_cwd = curthread->t_cwd;
 	}
-	/* Added initialization of the fd descriptor data structure - starts*/
+	/* Added initialization for thread_fork - starts*/
 
 	int i = 0 ;
 
-	for (i = 0 ; i < __OPEN_MAX ; i++)
+	for (i=0 ; i<__OPEN_MAX ;i++)
 	{
+		newthread->fd[i] = curthread->fd[i] ;
+
 		if (curthread->fd[i] != NULL)
 		{
-			newthread->fd[i] = curthread->fd[i] ;
+			curthread->fd[i]->referenceCount++ ;
 		}
 	}
 
 
-	/* Initialization of the fd descriptor data structure ends*/
+//	newthread->pid = (pid_t)data2 ;
+
+	/* Initialization for thread_fork  ends*/
 
 	/*
 	 * Because new threads come out holding the cpu runqueue lock
@@ -547,6 +552,12 @@ thread_fork(const char *name,
 
 	/* Lock the current cpu's run queue and make the new thread runnable */
 	thread_make_runnable(newthread, false);
+
+//	if (data2 != 0)
+//	{
+//		newthread->t_addrspace = (struct addrspace *)data2 ;
+//	}
+
 
 	/*
 	 * Return new thread structure if it's wanted. Note that using
