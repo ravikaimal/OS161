@@ -44,6 +44,7 @@
 #include <vfs.h>
 #include <vnode.h>
 #include <syscall.h>
+#include <synch.h>
 #include <test.h>
 #include <kern/filesyscalls.h>
 
@@ -99,40 +100,38 @@ runprogram(char *progname)
 
 	char *path = kstrdup("con:");
 	curthread->fd[0] = (struct filehandle *)kmalloc(sizeof(struct filehandle *));
-	//curthread->t_cwd = (struct vnode*)kmalloc(sizeof(struct vnode *)) ;
-	//curthread->fd[0]->vnode = (struct vnode*)kmalloc(sizeof(struct vnode *)) ;
 	result = vfs_open(path, O_RDONLY, 0664, &(curthread->fd[0]->vnode)) ;
-//	kprintf("\nrunprogram : std in %d",result) ;
 	if (result != 0)
 	{
 		return EFAULT ;
 	}
 	curthread->fd[0]->openflags =  O_RDONLY ;
-//	kprintf("\nrunprogram : write ") ;
+	curthread->fd[0]->referenceCount = 1 ;
+	curthread->fd[0]->reflock = lock_create("reflock") ;
 
 	char *path1 = kstrdup("con:");
 
 	curthread->fd[1] = (struct filehandle *)kmalloc(sizeof(struct filehandle *));
-	//curthread->fd[1]->vnode = (struct vnode*)kmalloc(sizeof(struct vnode *)) ;
 	result = vfs_open(path1, O_WRONLY, 0664, &(curthread->fd[1]->vnode)) ;
-//	kprintf("\nrunprogram : std write %d",result) ;
 	if (result != 0)
 	{
 		return EFAULT ;
 	}
 	curthread->fd[1]->openflags =  O_WRONLY ;
+	curthread->fd[1]->referenceCount = 1 ;
+	curthread->fd[1]->reflock = lock_create("reflock") ;
 
 	char *path2 = kstrdup("con:");
 
 	curthread->fd[2] = (struct filehandle *)kmalloc(sizeof(struct filehandle *));
-	//curthread->fd[2]->vnode = (struct vnode*)kmalloc(sizeof(struct vnode *)) ;
 	result = vfs_open(path2, O_WRONLY, 0664, &(curthread->fd[2]->vnode)) ;
-//	kprintf("\nrunprogram : std err %d",result) ;
+	curthread->fd[2]->referenceCount = 1 ;
 	if (result != 0)
 	{
 		return EFAULT ;
 	}
 	curthread->fd[2]->openflags =  O_WRONLY ;
+	curthread->fd[2]->reflock = lock_create("reflock") ;
 
 	/* Warp to user mode. */
 	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
