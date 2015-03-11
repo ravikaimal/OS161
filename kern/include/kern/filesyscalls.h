@@ -16,6 +16,7 @@ struct filehandle{
 	int referenceCount ; //No of processes accessing the file.
 	struct lock *lock ; // Lock for the offset.
 	int openflags ; //
+	struct lock *reflock ;
 } ;
 int sys_open(userptr_t ,userptr_t ,userptr_t ) ;
 int sys_read(userptr_t ,userptr_t ,userptr_t ) ;
