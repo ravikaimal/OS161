@@ -150,7 +150,7 @@ void sys_exit(int exit_code){
 }
 
 pid_t waitpid(pid_t pid, int *status, int options){
-	kprintf("\nwaitpid : %d\n",(int)pid);
+//	kprintf("\nwaitpid : %d\n",(int)pid);
 
 	if (pid <=0 || pid >= __PID_MAX_LOCAL)
 	{
@@ -171,13 +171,13 @@ pid_t waitpid(pid_t pid, int *status, int options){
 	{
 		return ECHILD ;
 	}
-	if (process_table[pid]->ppid != curthread->pid)	//curthread->pid
-	{
-		return ECHILD ;
-	}
 	if(process_table[pid] == NULL)
 	{
 		return ESRCH;
+	}
+	if (process_table[pid]->ppid != curthread->pid)	//curthread->pid
+	{
+		return ECHILD ;
 	}
 	pid_t ppid = process_table[curthread->pid]->ppid ;
 
@@ -186,10 +186,10 @@ pid_t waitpid(pid_t pid, int *status, int options){
 		return ECHILD ;
 	}
 
-	if (ppid == process_table[pid]->ppid)
-	{
-		return ECHILD ;
-	}
+//	if (ppid == process_table[pid]->ppid)
+//	{
+//		return ECHILD ;
+//	}
 
 
 	if(process_table[pid]->exited){ //check whether it is exited.
