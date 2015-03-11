@@ -76,8 +76,9 @@ int sys_open(userptr_t file_name,userptr_t flags,userptr_t mode)
 	{
 		return stat_result ;
 	}
-	curthread->fd[i]->referenceCount++ ;
+	curthread->fd[i]->referenceCount = 1 ;
 	curthread->fd[i]->lock = lock_create("filelock") ;
+	curthread->fd[i]->reflock = lock_create("reflock") ;
 
 
 	curthread->fd[i]->openflags = open_flags & O_ACCMODE ;
@@ -316,20 +317,27 @@ int sys_close(userptr_t userpointer)
 		return EBADF;
 	}
 
+	lock_acquire(curthread->fd[userfd]->reflock) ;
+
+//	kprintf("\nsys_close ---: userfd %d    %d\n ",userfd,curthread->fd[userfd]->referenceCount) ;
 	if(curthread->fd[userfd]->referenceCount == 1)
 	{
 		if (curthread->fd[userfd]->vnode != NULL && curthread->fd[userfd]->vnode->vn_opencount > 0)
 		{
-			kprintf("\nsys_close: open count %d\n ",curthread->fd[userfd]->vnode->vn_opencount) ;
-			vfs_close(curthread->fd[userfd]->vnode) ;
+//			kprintf("\nsys_close 1: open count %d\n ",curthread->fd[userfd]->vnode->vn_opencount) ;
+			struct vnode *vnode1 = curthread->fd[userfd]->vnode ;
+//			kprintf("\nsys_close 2: open count %d\n ",vnode1->vn_opencount) ;
+			vfs_close(vnode1) ;
 		}
-
+		lock_release(curthread->fd[userfd]->reflock) ;
 		curthread->fd[userfd] = NULL ;
 	}
 	else
 	{
 		curthread->fd[userfd]->referenceCount-- ;
+		lock_release(curthread->fd[userfd]->reflock) ;
 	}
+
 
 	return 0 ;
 }
