@@ -161,24 +161,8 @@ thread_create(const char *name)
 //	thread->is_fd_active = false ;
 
 	/* If you add to struct thread, be sure to initialize here */
-	int i=2;
-	for(i=2;i<__PID_MAX_LOCAL;i++)
-	{
-		if(process_table[i] == NULL)
-		{
-			break;
-		}
-	}
-	if(i == __PID_MAX_LOCAL)
-	{
-		return NULL;
-	}
-//	kprintf("\n Sysfork : assigning %d\n ",i) ;
-	process_table[i] = (struct process *)kmalloc(sizeof(struct process)) ;
-	process_table[i]->exit_lock = lock_create("exit-lock") ;
-	process_table[i]->exit_cv = cv_create("exit-cv") ;
 
-	thread->pid = i ;
+//	thread->pid = i ;
 
 	return thread;
 }
@@ -550,8 +534,29 @@ thread_fork(const char *name,
 		newthread->t_cwd = curthread->t_cwd;
 	}
 	/* Added initialization for thread_fork - starts*/
-	process_table[newthread->pid]->currentthread = newthread ;
-	process_table[newthread->pid]->ppid = curthread->pid ;
+
+	int j=2;
+	for(j=2;j<__PID_MAX_LOCAL;j++)
+	{
+		if(process_table[j] == NULL)
+		{
+			break;
+		}
+	}
+	if(j == __PID_MAX_LOCAL)
+	{
+		return EAGAIN;
+	}
+	newthread->pid = j ;
+
+//	kprintf("\n Sysfork : assigning %d\n ",i) ;
+	process_table[j] = (struct process *)kmalloc(sizeof(struct process)) ;
+	process_table[j]->exit_lock = lock_create("exit-lock") ;
+	process_table[j]->exit_cv = cv_create("exit-cv") ;
+
+
+	process_table[j]->currentthread = newthread ;
+	process_table[j]->ppid = curthread->pid ;
 
 	int i = 0 ;
 
