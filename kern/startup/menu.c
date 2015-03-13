@@ -136,22 +136,23 @@ common_prog(int nargs, char **args)
 		"synchronization-problems kernel.\n");
 #endif
 
+	struct thread *thread;
 	result = thread_fork(args[0] /* thread name */,
 			cmd_progthread /* thread function */,
 			args /* thread arg */, nargs /* thread arg */,
-			NULL);
+			&thread);
 	if (result) {
 		kprintf("thread_fork failed: %s\n", strerror(result));
 		return result;
 	}
-	pid_t pid = (pid_t)result ;
+//	pid_t pid = (pid_t)result ;
 
 //	kprintf("calling execv:\n");
 	/***************/
 	int status = 0 ;
 //	kprintf("\nwaiting on pid: %d\n",(int)pid);
 //	if (pid > 0){
-	int rs = wait_pid(pid, &status, 0) ;
+	int rs = wait_pid(thread->pid, &status, 0) ;
 	if (rs) {
 		kprintf("wait pid failed: %s\n", strerror(rs));
 		return rs;

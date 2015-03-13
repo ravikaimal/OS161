@@ -20,25 +20,9 @@
 
 pid_t sys_fork(struct trapframe *tf)
 {
-	int i=2;
-	for(i=2;i<__PID_MAX_LOCAL;i++)
-	{
-		if(process_table[i] == NULL)
-		{
-			break;
-		}
-	}
-	if(i == __PID_MAX_LOCAL)
-	{
-		return EMPROC;
-	}
-//	kprintf("\n Sysfork : assigning %d\n ",i) ;
-	process_table[i] = (struct process *)kmalloc(sizeof(struct process)) ;
-	process_table[i]->exit_lock = lock_create("exit-lock") ;
-	process_table[i]->exit_cv = cv_create("exit-cv") ;
 	//	pid_t pid= (pid_t) i;
-	tf->tf_a1 = i ;
-	tf->tf_a2 = curthread->pid ;
+//	tf->tf_a1 = i ;
+//	tf->tf_a2 = curthread->pid ;
 	//	kprintf("sys_fork :pid %d ",(int)pid) ;
 	//    tf->tf_a0 = (uint32_t)curthread->t_addrspace ;
 	struct trapframe *newtrapframe =kmalloc(sizeof(struct trapframe ));
@@ -72,7 +56,7 @@ pid_t sys_fork(struct trapframe *tf)
 		return result ;
 	}
 
-	tf->tf_v0 = i;
+	tf->tf_v0 = newthread->pid;
 	tf->tf_a3 = 0;
 
 	//	result = splx(splresult) ;
@@ -82,10 +66,8 @@ pid_t sys_fork(struct trapframe *tf)
 	//		return result ;
 	//	}
 
-	process_table[i]->currentthread = newthread ;
-	process_table[i]->ppid = curthread->pid ;
 
-	return -i ;
+	return -(newthread->pid) ;
 }
 
 void child_process_entry(void *data1, unsigned long data2)
@@ -105,11 +87,11 @@ void child_process_entry(void *data1, unsigned long data2)
 
 	//	kprintf("\nchild_process_entry as copy result %d \n",result) ;
 	as_activate(curthread->t_addrspace) ;
-	curthread->pid = (pid_t)tf->tf_a1 ;
+//	curthread->pid = (pid_t)tf->tf_a1 ;
 	//	kprintf("\nchild_process_entry : pid %d \n",curthread->pid) ;
 
 
-	process_table[curthread->pid]->ppid = (pid_t)tf->tf_a2 ;
+//	process_table[curthread->pid]->ppid = (pid_t)tf->tf_a2 ;
 
 	//	kprintf("\nchild_process_entry : ppid %d \n",process_table[curthread->pid]->ppid ) ;
 
@@ -131,11 +113,9 @@ pid_t getpid(void)
 
 void sys_exit(int exit_code){
 	pid_t pid = curthread->pid ;
-//	kprintf("\n exiting in sys_exit :: %d %d\n",(int)pid,exit_code) ;
 	lock_acquire(process_table[pid]->exit_lock) ;
 	process_table[pid]->exited = true ;
 	process_table[pid]->exitcode=_MKWAIT_EXIT(exit_code);
-	//close file descriptors
 	int i=0;
 	for(i=0;i<__OPEN_MAX;i++){
 		if(curthread->fd[i] != NULL)
@@ -144,16 +124,13 @@ void sys_exit(int exit_code){
 		}
 
 	}
-//	kprintf("\n exiting in sys_exit - waking up for  :: %d %d\n",(int)pid,exit_code) ;
 	cv_broadcast(process_table[pid]->exit_cv,process_table[pid]->exit_lock) ;
 	lock_release(process_table[pid]->exit_lock) ;
-//	kprintf("\n exiting in sys_exit - exiting thread for  :: %d %d\n",(int)pid,exit_code) ;
 
 	thread_exit();
 }
 
 pid_t waitpid(pid_t pid, int *status, int options){
-//	kprintf("\nwaitpid : %d\n",(int)pid);
 
 	if (pid <=0 || pid >= __PID_MAX_LOCAL)
 	{
@@ -169,7 +146,6 @@ pid_t waitpid(pid_t pid, int *status, int options){
 	{
 		return result ;
 	}
-//	kprintf("\npassed copyin\n");
 	if (pid == curthread->pid)
 	{
 		return ECHILD ;
@@ -189,27 +165,22 @@ pid_t waitpid(pid_t pid, int *status, int options){
 		return ECHILD ;
 	}
 
-//	if (ppid == process_table[pid]->ppid)
-//	{
-//		return ECHILD ;
-//	}
-
 
 	if(process_table[pid]->exited){ //check whether it is exited.
-//		*status=process_table[pid]->exitcode;
 		result = copyout(&process_table[pid]->exitcode,(userptr_t)status,sizeof(int)) ;
 		if (result)
 		{
 			return result ;
 		}
-		process_table[pid] = NULL ;
+		if(pid != 0){
+			process_table[pid] = NULL ;
+		}
 		return -pid;
 	}
 	lock_acquire(process_table[pid]->exit_lock) ;
 	while(!process_table[pid]->exited ){
 		cv_wait(process_table[pid]->exit_cv,process_table[pid]->exit_lock) ;
 	}
-//	*status=process_table[pid]->exitcode;
 	result = copyout(&process_table[pid]->exitcode,(userptr_t)status,sizeof(int)) ;
 
 	if (result)
@@ -217,9 +188,10 @@ pid_t waitpid(pid_t pid, int *status, int options){
 		return result ;
 	}
 
-	//	kprintf("\nstatus 2 %d \n",*status);
 	lock_release(process_table[pid]->exit_lock) ;
-	process_table[pid] = NULL ;
+	if (pid != 0){
+		process_table[pid] = NULL ;
+	}
 
 	return -pid;
 }
@@ -385,20 +357,18 @@ int execv(const char *program, char **args)
 }
 
 pid_t wait_pid(pid_t pid, int *status, int options){
-//	kprintf("\nwaiting .....\n") ;
-//	kprintf("\nwait_pid ::waiting on pid: %d\n",(int)pid);
 	options = 0 ;
 	lock_acquire(process_table[pid]->exit_lock) ;
-//	kprintf("\nwait_pid ::lock acquired\n");
 	while(!process_table[pid]->exited ){
 		cv_wait(process_table[pid]->exit_cv,process_table[pid]->exit_lock) ;
 	}
-//	kprintf("\nwait ended .....\n") ;
 	*status=process_table[pid]->exitcode;
 	lock_release(process_table[pid]->exit_lock) ;
-	process_table[pid] = NULL ;
+	if (pid != 0){
+		process_table[pid] = NULL ;
+	}
 
-	return -pid;
+	return 0;
 }
 
 void sysexit(int exit_code){

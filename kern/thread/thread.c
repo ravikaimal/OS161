@@ -161,6 +161,24 @@ thread_create(const char *name)
 //	thread->is_fd_active = false ;
 
 	/* If you add to struct thread, be sure to initialize here */
+	int i=2;
+	for(i=2;i<__PID_MAX_LOCAL;i++)
+	{
+		if(process_table[i] == NULL)
+		{
+			break;
+		}
+	}
+	if(i == __PID_MAX_LOCAL)
+	{
+		return NULL;
+	}
+//	kprintf("\n Sysfork : assigning %d\n ",i) ;
+	process_table[i] = (struct process *)kmalloc(sizeof(struct process)) ;
+	process_table[i]->exit_lock = lock_create("exit-lock") ;
+	process_table[i]->exit_cv = cv_create("exit-cv") ;
+
+	thread->pid = i ;
 
 	return thread;
 }
@@ -532,6 +550,8 @@ thread_fork(const char *name,
 		newthread->t_cwd = curthread->t_cwd;
 	}
 	/* Added initialization for thread_fork - starts*/
+	process_table[newthread->pid]->currentthread = newthread ;
+	process_table[newthread->pid]->ppid = curthread->pid ;
 
 	int i = 0 ;
 
@@ -559,6 +579,7 @@ thread_fork(const char *name,
 
 	/* Set up the switchframe so entrypoint() gets called */
 	switchframe_init(newthread, entrypoint, data1, data2);
+
 
 	/* Lock the current cpu's run queue and make the new thread runnable */
 	thread_make_runnable(newthread, false);
