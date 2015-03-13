@@ -47,6 +47,7 @@
 #include <synch.h>
 #include <test.h>
 #include <kern/filesyscalls.h>
+#include <copyinout.h>
 
 /*
  * Load program "progname" and start running it in usermode.
@@ -55,7 +56,7 @@
  * Calls vfs_open on progname and thus may destroy it.
  */
 int
-runprogram(char *progname)
+runprogram(char *progname,char **args)
 {
 	struct vnode *v;
 	vaddr_t entrypoint, stackptr;
@@ -133,12 +134,80 @@ runprogram(char *progname)
 	curthread->fd[2]->openflags =  O_WRONLY ;
 	curthread->fd[2]->reflock = lock_create("reflock") ;
 
-//	curthread->pid = 300 ;
+//	kprintf("\n runprogram : calculating number of arguments \n") ;
 
-//	kprintf("\n Assigned id in runprogram: %d \n",curthread->pid) ;
+	int argc = 0 ;
+	if (args != NULL)
+	{
+		while (args[argc] != NULL)
+		{
+//			kprintf("\n runprogram : argument %s \n",args[argc]) ;
+			argc++ ;
+		}
+	}
+
+//	kprintf("\n runprogram : calculated %d \n",argc) ;
+
+	vaddr_t index[25] ;
+	int k = 0 ;
+
+	int i = argc-1 ;
+	size_t bytes_copied ;
+
+	while(i>= 0)
+	{
+		int length = strlen(args[i]) ;
+		int num0 = (4 - (length % 4)) ;
+
+		int j = 0 ;
+		char *temp1 = (char *)kmalloc((length+num0)*sizeof(char)) ;
+		strcpy(temp1,args[i]) ;
+
+		while(j<num0)
+		{
+			strcat(temp1,"\0") ;
+			j++ ;
+		}
+
+		stackptr = stackptr - ((length+num0)*sizeof(char)) ;
+
+
+		result = copyoutstr(temp1,(userptr_t) stackptr,(length+num0)*sizeof(char),&bytes_copied) ;
+		if (result)
+		{
+			return result ;
+		}
+
+		index[k] = (vaddr_t )stackptr;
+		k++ ;
+
+		i-- ;
+	}
+
+	i = 0 ;
+
+	stackptr = stackptr - sizeof(int) ;
+	stackptr = stackptr - sizeof(int) ;
+	k-- ;
+	while(i<=k)
+	{
+
+		result = copyout(&index[i],(userptr_t) stackptr,sizeof(int)) ;
+		if (result)
+		{
+			return result ;
+		}
+
+		i++ ;
+		if (i<=k){
+		stackptr = stackptr - sizeof(int) ;
+		}
+
+	}
+
 
 	/* Warp to user mode. */
-	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
+	enter_new_process(argc,(userptr_t)stackptr /*userspace addr of argv*/,
 			stackptr, entrypoint);
 
 	/* enter_new_process does not return. */

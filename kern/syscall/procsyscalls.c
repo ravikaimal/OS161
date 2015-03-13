@@ -282,7 +282,6 @@ int execv(const char *program, char **args)
 		{
 			return result ;
 		}
-//		kprintf("\n execv : args %d  %s \n",i+1,temp[i]) ;
 
 		i++ ;
 	}
@@ -295,9 +294,6 @@ int execv(const char *program, char **args)
 		return result;
 	}
 
-//	kprintf("\n execv : File Open Status result %d \n",result) ;
-
-//	KASSERT(curthread->t_addrspace == NULL);
 
 	/* Create a new address space. */
 	struct addrspace *addrspace_copy=curthread->t_addrspace;
@@ -311,7 +307,6 @@ int execv(const char *program, char **args)
 	as_activate(curthread->t_addrspace);
 
 	result = load_elf(v, &entrypoint);
-//	kprintf("\n execv : load_elf result %d\n",result);
 	if (result) {
 		vfs_close(v);
 		return result;
@@ -319,14 +314,12 @@ int execv(const char *program, char **args)
 
 	vfs_close(v);
 
-//	kprintf("\n execv : File Loaded and Closed \n") ;
 
 	result = as_define_stack(curthread->t_addrspace, &stackptr);
 	if (result) {
 		return result;
 	}
 
-//	kprintf("\n execv : Stack Defined \n") ;
 
 	i = i -1 ;
 	vaddr_t index[25] ;
@@ -341,7 +334,6 @@ int execv(const char *program, char **args)
 		char *temp1 = (char *)kmalloc((length+num0)*sizeof(char)) ;
 		strcpy(temp1,temp[i]) ;
 
-//		kprintf("\n execv : temp1 %s \n",temp1) ;
 		while(j<num0)
 		{
 			strcat(temp1,"\0") ;
@@ -354,15 +346,10 @@ int execv(const char *program, char **args)
 		result = copyoutstr(temp1,(userptr_t) stackptr,(length+num0)*sizeof(char),&bytes_copied) ;
 		if (result)
 		{
-//			kprintf("\n execv : result %d \n",result) ;
 			return result ;
 		}
-//		kprintf("\n execv : stackptr -%x  %s \n",(unsigned int)stackptr ,(char*)stackptr) ;
 
-//		kprintf("\n execv : result after  \n") ;
-//		index[k] = (vaddr_t *)kmalloc(sizeof(vaddr_t *)) ;
 		index[k] = (vaddr_t )stackptr;
-//		kprintf("\n execv : index[%d] -  %x %s \n",k,(unsigned int)index[k],(char *)index[k]) ;
 		k++ ;
 
 		i-- ;
@@ -371,34 +358,21 @@ int execv(const char *program, char **args)
 	i = 0 ;
 
 	stackptr = stackptr - sizeof(int) ;
-//	stackptr = (vaddr_t )NULL ;
-//	result = copyout(NULL,(userptr_t) stackptr,sizeof(int)) ;
-//	if (result)
-//	{
-//		kprintf("\n execv : result PPPP %d \n",result) ;
-//		return result ;
-//	}
-//	kprintf("\n execv : result  PPP after  \n") ;
 	stackptr = stackptr - sizeof(int) ;
-//	kprintf("\nK is : %d\n",k);
 	k-- ;
 	while(i<=k)
 	{
 
-//		kprintf("Address being copied into stackptr %x",(unsigned int)index[i]);
 		result = copyout(&index[i],(userptr_t) stackptr,sizeof(int)) ;
 		if (result)
 		{
-//			kprintf("\n execv : result ss %d \n",result) ;
 			return result ;
 		}
 
 		i++ ;
-//		kprintf("\n execv : i k  %d %d \n",i,k) ;
 		if (i<=k){
 		stackptr = stackptr - sizeof(int) ;
 		}
-//		kprintf("\n execv : Final addresses : %x  \n",(unsigned int)stackptr) ;
 
 	}
 
