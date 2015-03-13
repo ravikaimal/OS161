@@ -396,10 +396,10 @@ thread_bootstrap(void)
 	process_table[0]->ppid = 0 ;
 	process_table[0]->exit_lock = lock_create("p0lock") ;
 	process_table[0]->exit_cv = cv_create("p0cv") ;
-	process_table[300] = (struct process *)kmalloc(sizeof(struct process)) ;
-	process_table[300]->ppid = 0 ;
-	process_table[300]->exit_lock = lock_create("p0lock") ;
-	process_table[300]->exit_cv = cv_create("p0cv") ;
+//	process_table[300] = (struct process *)kmalloc(sizeof(struct process)) ;
+//	process_table[300]->ppid = 0 ;
+//	process_table[300]->exit_lock = lock_create("p0lock") ;
+//	process_table[300]->exit_cv = cv_create("p0cv") ;
 }
 
 /*

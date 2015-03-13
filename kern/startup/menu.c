@@ -144,19 +144,19 @@ common_prog(int nargs, char **args)
 	}
 	pid_t pid = (pid_t)result ;
 
-	kprintf("calling execv:\n");
+//	kprintf("calling execv:\n");
 	/***************/
 	int status = 0 ;
-	kprintf("\nwaiting on pid: %d\n",(int)pid);
+//	kprintf("\nwaiting on pid: %d\n",(int)pid);
 //	if (pid > 0){
-	int rs = wait_pid(300, &status, 0) ;
+	int rs = wait_pid(pid, &status, 0) ;
 	if (rs) {
 		kprintf("wait pid failed: %s\n", strerror(rs));
 		return rs;
 	}
 //	}
 
-	kprintf("Program Exited:\n");
+//	kprintf("Program Exited:\n");
 //	sysexit(status) ;
 
 	/***************/

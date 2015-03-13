@@ -133,9 +133,9 @@ runprogram(char *progname)
 	curthread->fd[2]->openflags =  O_WRONLY ;
 	curthread->fd[2]->reflock = lock_create("reflock") ;
 
-	curthread->pid = 300 ;
+//	curthread->pid = 300 ;
 
-	kprintf("\n Assigned id in runprogram: %d \n",curthread->pid) ;
+//	kprintf("\n Assigned id in runprogram: %d \n",curthread->pid) ;
 
 	/* Warp to user mode. */
 	enter_new_process(0 /*argc*/, NULL /*userspace addr of argv*/,
