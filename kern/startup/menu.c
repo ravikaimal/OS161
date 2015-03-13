@@ -43,6 +43,7 @@
 #include "opt-synchprobs.h"
 #include "opt-sfs.h"
 #include "opt-net.h"
+#include <kern/procsyscalls.h>
 
 /*
  * In-kernel menu and command dispatcher.
@@ -142,6 +143,20 @@ common_prog(int nargs, char **args)
 		return result;
 	}
 
+	kprintf("calling execv:\n");
+	/***************/
+	int status = 0 ;
+	pid_t pid = (pid_t)result ;
+	int rs = wait_pid(pid, &status, 0) ;
+	if (rs) {
+		kprintf("wait pid failed: %s\n", strerror(rs));
+		return rs;
+	}
+
+	kprintf("Program Exited:\n");
+	sysexit(status) ;
+
+	/***************/
 	return 0;
 }
 

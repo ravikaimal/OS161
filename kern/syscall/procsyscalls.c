@@ -247,28 +247,41 @@ int execv(const char *program, char **args)
 	{
 		return ENAMETOOLONG ;
 	}
-
-	char **kargs ;
-
 	int argc = 0 ;
 
-	while(args[argc] != NULL )
+	if (args == NULL)
 	{
-		result = copyinstr((const userptr_t)args[argc],kargs[argc],strlen(args[argc]),&bytes_copied) ;
+		return EFAULT ;
+	}
 
+	while (true)
+	{
+		char *temp = (char *)kmalloc(25*sizeof(char)) ;
+		result = copyinstr((const userptr_t)args[argc],temp,25*sizeof(char),&bytes_copied) ;
+		if (result)
+		{
+			break ;
+		}
+		argc++ ;
+	}
+
+
+	char **temp = (char **)kmalloc(argc*sizeof(char *)) ;
+
+	int i = 0 ;
+
+
+	while(i<argc)
+	{
+		temp[i] = (char *)kmalloc(25*sizeof(char)) ;
+		result = copyinstr((const userptr_t)args[i],temp[i],25*sizeof(char),&bytes_copied) ;
 		if (result)
 		{
 			return result ;
 		}
-		if (strlen(kargs[argc]) %4 != 0)
-		{
-			unsigned int i = 0;
-			for (i = 0 ; i < strlen(kargs[argc]) %4 ; i++)
-			{
-				kargs[argc] = strcat(kargs[argc],"\0" ) ;
-			}
-		}
-		argc++;
+//		kprintf("\n execv : args %d  %s \n",i+1,temp[i]) ;
+
+		i++ ;
 	}
 
 	struct vnode *v;
@@ -279,18 +292,23 @@ int execv(const char *program, char **args)
 		return result;
 	}
 
-	KASSERT(curthread->t_addrspace == NULL);
+//	kprintf("\n execv : File Open Status result %d \n",result) ;
+
+//	KASSERT(curthread->t_addrspace == NULL);
 
 	/* Create a new address space. */
+	struct addrspace *addrspace_copy=curthread->t_addrspace;
 	curthread->t_addrspace = as_create();
 	if (curthread->t_addrspace==NULL) {
 		vfs_close(v);
+		curthread->t_addrspace = addrspace_copy;
 		return ENOMEM;
 	}
 
 	as_activate(curthread->t_addrspace);
 
 	result = load_elf(v, &entrypoint);
+//	kprintf("\n execv : load_elf result %d\n",result);
 	if (result) {
 		vfs_close(v);
 		return result;
@@ -298,17 +316,89 @@ int execv(const char *program, char **args)
 
 	vfs_close(v);
 
+//	kprintf("\n execv : File Loaded and Closed \n") ;
+
 	result = as_define_stack(curthread->t_addrspace, &stackptr);
 	if (result) {
 		return result;
 	}
 
-	result = copyout(kargs,(userptr_t)stackptr+16,sizeof(kargs)) ;
-	if (result) {
-		return result;
+//	kprintf("\n execv : Stack Defined \n") ;
+
+	i = i -1 ;
+	vaddr_t index[25] ;
+	int k = 0 ;
+
+	while(i>= 0)
+	{
+		int length = strlen(temp[i]) ;
+		int num0 = (4 - (length % 4)) ;
+
+		int j = 0 ;
+		char *temp1 = (char *)kmalloc((length+num0)*sizeof(char)) ;
+		strcpy(temp1,temp[i]) ;
+
+//		kprintf("\n execv : temp1 %s \n",temp1) ;
+		while(j<num0)
+		{
+			strcat(temp1,"\0") ;
+			j++ ;
+		}
+
+		stackptr = stackptr - ((length+num0)*sizeof(char)) ;
+
+
+		result = copyoutstr(temp1,(userptr_t) stackptr,(length+num0)*sizeof(char),&bytes_copied) ;
+		if (result)
+		{
+//			kprintf("\n execv : result %d \n",result) ;
+			return result ;
+		}
+//		kprintf("\n execv : stackptr -%x  %s \n",(unsigned int)stackptr ,(char*)stackptr) ;
+
+//		kprintf("\n execv : result after  \n") ;
+//		index[k] = (vaddr_t *)kmalloc(sizeof(vaddr_t *)) ;
+		index[k] = (vaddr_t )stackptr;
+//		kprintf("\n execv : index[%d] -  %x %s \n",k,(unsigned int)index[k],(char *)index[k]) ;
+		k++ ;
+
+		i-- ;
 	}
 
-	stackptr = stackptr - sizeof(kargs) ;
+	i = 0 ;
+
+	stackptr = stackptr - sizeof(int) ;
+//	stackptr = (vaddr_t )NULL ;
+//	result = copyout(NULL,(userptr_t) stackptr,sizeof(int)) ;
+//	if (result)
+//	{
+//		kprintf("\n execv : result PPPP %d \n",result) ;
+//		return result ;
+//	}
+//	kprintf("\n execv : result  PPP after  \n") ;
+	stackptr = stackptr - sizeof(int) ;
+//	kprintf("\nK is : %d\n",k);
+	k-- ;
+	while(i<=k)
+	{
+
+//		kprintf("Address being copied into stackptr %x",(unsigned int)index[i]);
+		result = copyout(&index[i],(userptr_t) stackptr,sizeof(int)) ;
+		if (result)
+		{
+//			kprintf("\n execv : result ss %d \n",result) ;
+			return result ;
+		}
+
+		i++ ;
+//		kprintf("\n execv : i k  %d %d \n",i,k) ;
+		if (i<=k){
+		stackptr = stackptr - sizeof(int) ;
+		}
+//		kprintf("\n execv : Final addresses : %x  \n",(unsigned int)stackptr) ;
+
+	}
+
 
 	enter_new_process(argc,(userptr_t) stackptr , stackptr, entrypoint);
 
@@ -317,4 +407,37 @@ int execv(const char *program, char **args)
 
 }
 
+pid_t wait_pid(pid_t pid, int *status, int options){
 
+	options = 0 ;
+	lock_acquire(process_table[pid]->exit_lock) ;
+	while(!process_table[pid]->exited ){
+		cv_wait(process_table[pid]->exit_cv,process_table[pid]->exit_lock) ;
+	}
+	*status=process_table[pid]->exitcode;
+	lock_release(process_table[pid]->exit_lock) ;
+	process_table[pid] = NULL ;
+
+	return -pid;
+}
+
+void sysexit(int exit_code){
+	pid_t pid = curthread->pid ;
+	lock_acquire(process_table[pid]->exit_lock) ;
+	process_table[pid]->exited = true ;
+	process_table[pid]->exitcode=_MKWAIT_EXIT(exit_code);
+	//close file descriptors
+	int i=0;
+	for(i=0;i<__OPEN_MAX;i++){
+		if(curthread->fd[i] != NULL)
+		{
+			sys_close((userptr_t)i);
+		}
+
+	}
+
+	cv_broadcast(process_table[pid]->exit_cv,process_table[pid]->exit_lock) ;
+	lock_release(process_table[pid]->exit_lock) ;
+
+	thread_exit();
+}
