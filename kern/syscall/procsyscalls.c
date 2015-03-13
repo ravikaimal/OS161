@@ -32,6 +32,7 @@ pid_t sys_fork(struct trapframe *tf)
 	{
 		return EMPROC;
 	}
+	kprintf("\n Sysfork : assigning %d\n ",i) ;
 	process_table[i] = (struct process *)kmalloc(sizeof(struct process)) ;
 	process_table[i]->exit_lock = lock_create("exit-lock") ;
 	process_table[i]->exit_cv = cv_create("exit-cv") ;
@@ -130,6 +131,7 @@ pid_t getpid(void)
 
 void sys_exit(int exit_code){
 	pid_t pid = curthread->pid ;
+	kprintf("\n exiting in sys_exit :: %d %d\n",(int)pid,exit_code) ;
 	lock_acquire(process_table[pid]->exit_lock) ;
 	process_table[pid]->exited = true ;
 	process_table[pid]->exitcode=_MKWAIT_EXIT(exit_code);
@@ -142,9 +144,10 @@ void sys_exit(int exit_code){
 		}
 
 	}
-
+	kprintf("\n exiting in sys_exit - waking up for  :: %d %d\n",(int)pid,exit_code) ;
 	cv_broadcast(process_table[pid]->exit_cv,process_table[pid]->exit_lock) ;
 	lock_release(process_table[pid]->exit_lock) ;
+	kprintf("\n exiting in sys_exit - exiting thread for  :: %d %d\n",(int)pid,exit_code) ;
 
 	thread_exit();
 }
@@ -408,12 +411,15 @@ int execv(const char *program, char **args)
 }
 
 pid_t wait_pid(pid_t pid, int *status, int options){
-
+	kprintf("\nwaiting .....\n") ;
+	kprintf("\nwait_pid ::waiting on pid: %d\n",(int)pid);
 	options = 0 ;
 	lock_acquire(process_table[pid]->exit_lock) ;
+	kprintf("\nwait_pid ::lock acquired\n");
 	while(!process_table[pid]->exited ){
 		cv_wait(process_table[pid]->exit_cv,process_table[pid]->exit_lock) ;
 	}
+	kprintf("\nwait ended .....\n") ;
 	*status=process_table[pid]->exitcode;
 	lock_release(process_table[pid]->exit_lock) ;
 	process_table[pid] = NULL ;

@@ -142,19 +142,22 @@ common_prog(int nargs, char **args)
 		kprintf("thread_fork failed: %s\n", strerror(result));
 		return result;
 	}
+	pid_t pid = (pid_t)result ;
 
 	kprintf("calling execv:\n");
 	/***************/
 	int status = 0 ;
-	pid_t pid = (pid_t)result ;
-	int rs = wait_pid(pid, &status, 0) ;
+	kprintf("\nwaiting on pid: %d\n",(int)pid);
+//	if (pid > 0){
+	int rs = wait_pid(300, &status, 0) ;
 	if (rs) {
 		kprintf("wait pid failed: %s\n", strerror(rs));
 		return rs;
 	}
+//	}
 
 	kprintf("Program Exited:\n");
-	sysexit(status) ;
+//	sysexit(status) ;
 
 	/***************/
 	return 0;
