@@ -30,7 +30,7 @@ int sys_open(userptr_t file_name,userptr_t flags,userptr_t mode)
 	{
 		return EFAULT ;
 	}
-	char * k_file_name =(char*)kmalloc(sizeof(char *));  // = kstrdup((char *)file_name) ;//= (char*)kmalloc(sizeof(char *));
+	char * k_file_name =(char*)kmalloc(sizeof(char *));
 
 	size_t buflen ;
 	int open_flags = (int)flags ;
@@ -95,6 +95,7 @@ int sys_open(userptr_t file_name,userptr_t flags,userptr_t mode)
 		curthread->fd[i]->offset =  buf->st_size ;
 	}
 
+	kfree(k_file_name) ;
 	return -i ;
 }
 
@@ -330,6 +331,8 @@ int sys_close(userptr_t userpointer)
 			vfs_close(vnode1) ;
 		}
 		lock_release(curthread->fd[userfd]->reflock) ;
+		lock_destroy(curthread->fd[userfd]->reflock) ;
+		kfree(curthread->fd[userfd]) ;
 		curthread->fd[userfd] = NULL ;
 	}
 	else

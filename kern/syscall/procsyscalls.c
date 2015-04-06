@@ -20,11 +20,6 @@
 
 pid_t sys_fork(struct trapframe *tf)
 {
-	//	pid_t pid= (pid_t) i;
-//	tf->tf_a1 = i ;
-//	tf->tf_a2 = curthread->pid ;
-	//	kprintf("sys_fork :pid %d ",(int)pid) ;
-	//    tf->tf_a0 = (uint32_t)curthread->t_addrspace ;
 	struct trapframe *newtrapframe =kmalloc(sizeof(struct trapframe ));
 	memcpy(newtrapframe,tf ,sizeof(struct trapframe ));
 	int result ;
@@ -39,18 +34,7 @@ pid_t sys_fork(struct trapframe *tf)
 
 	struct thread *newthread ;
 
-	//	int splresult = splhigh() ;
-	//
-	//	if (splresult)
-	//	{
-	//		return splresult ;
-	//	}
-
-	//	kprintf("\n pid : %d\n",(int)tf->tf_a1);
-
 	result = thread_fork("childthread", child_process_entry, newtrapframe,(unsigned long)newaddrspace,&newthread);
-
-	//	kprintf("\nsys_fork : Result of thread_copy : %d\n",result);
 	if (result)
 	{
 		return result ;
@@ -59,41 +43,16 @@ pid_t sys_fork(struct trapframe *tf)
 	tf->tf_v0 = newthread->pid;
 	tf->tf_a3 = 0;
 
-	//	result = splx(splresult) ;
-	//
-	//	if (result )
-	//	{
-	//		return result ;
-	//	}
-
-
 	return -(newthread->pid) ;
 }
 
 void child_process_entry(void *data1, unsigned long data2)
 {
-	//	kprintf("\nChild has started running\n") ;
 	struct trapframe *tf = (struct trapframe *)data1 ;
-
-
-	//	kprintf("\n child_process_entry pid : %d\n",(int)curthread->pid);
-
-	//	data2 = 0 ;
-
-	//	int result = as_copy((struct addrspace *)data2,&(curthread->t_addrspace));
 
 	curthread->t_addrspace = (struct addrspace *)data2 ;
 
-
-	//	kprintf("\nchild_process_entry as copy result %d \n",result) ;
 	as_activate(curthread->t_addrspace) ;
-//	curthread->pid = (pid_t)tf->tf_a1 ;
-	//	kprintf("\nchild_process_entry : pid %d \n",curthread->pid) ;
-
-
-//	process_table[curthread->pid]->ppid = (pid_t)tf->tf_a2 ;
-
-	//	kprintf("\nchild_process_entry : ppid %d \n",process_table[curthread->pid]->ppid ) ;
 
 	struct trapframe usertf ;
 
@@ -101,13 +60,12 @@ void child_process_entry(void *data1, unsigned long data2)
 	usertf.tf_v0 = 0 ;
 	usertf.tf_a3 = 0 ;
 	usertf.tf_epc += 4 ;
+	kfree(tf) ;
 	mips_usermode(&usertf) ;
-
 }
 
 pid_t getpid(void)
 {
-	//	kprintf(" getpid : %d",(int)curthread->pid);
 	return -curthread->pid ;
 }
 
@@ -126,7 +84,6 @@ void sys_exit(int exit_code){
 	}
 	cv_broadcast(process_table[pid]->exit_cv,process_table[pid]->exit_lock) ;
 	lock_release(process_table[pid]->exit_lock) ;
-
 	thread_exit();
 }
 
@@ -173,6 +130,10 @@ pid_t waitpid(pid_t pid, int *status, int options){
 			return result ;
 		}
 		if(pid != 0){
+			lock_destroy(process_table[pid]->exit_lock) ;
+			cv_destroy(process_table[pid]->exit_cv) ;
+			process_table[pid]->currentthread = NULL ;
+			kfree(process_table[pid]) ;
 			process_table[pid] = NULL ;
 		}
 		return -pid;
@@ -189,7 +150,11 @@ pid_t waitpid(pid_t pid, int *status, int options){
 	}
 
 	lock_release(process_table[pid]->exit_lock) ;
+	lock_destroy(process_table[pid]->exit_lock) ;
+	cv_destroy(process_table[pid]->exit_cv) ;
+	process_table[pid]->currentthread = NULL ;
 	if (pid != 0){
+		kfree(process_table[pid]) ;
 		process_table[pid] = NULL ;
 	}
 
@@ -198,6 +163,7 @@ pid_t waitpid(pid_t pid, int *status, int options){
 
 int execv(const char *program, char **args)
 {
+	kprintf("\n\n execv testing \n\n") ;
 	if (program == NULL )
 	{
 		return EFAULT ;
@@ -238,6 +204,7 @@ int execv(const char *program, char **args)
 			break ;
 		}
 		argc++ ;
+		kfree(temp) ;
 	}
 
 
@@ -277,6 +244,7 @@ int execv(const char *program, char **args)
 	}
 
 	as_activate(curthread->t_addrspace);
+
 
 	result = load_elf(v, &entrypoint);
 	if (result) {
@@ -325,6 +293,7 @@ int execv(const char *program, char **args)
 		k++ ;
 
 		i-- ;
+		kfree(temp1) ;
 	}
 
 	i = 0 ;
@@ -347,7 +316,8 @@ int execv(const char *program, char **args)
 		}
 
 	}
-
+	kfree(temp) ;
+	kfree(kernel_pgm) ;
 
 	enter_new_process(argc,(userptr_t) stackptr , stackptr, entrypoint);
 

@@ -266,6 +266,8 @@ thread_destroy(struct thread *thread)
 	if (thread->t_stack != NULL) {
 		kfree(thread->t_stack);
 	}
+
+
 	threadlistnode_cleanup(&thread->t_listnode);
 	thread_machdep_cleanup(&thread->t_machdep);
 
