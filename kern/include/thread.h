@@ -134,6 +134,8 @@ struct process{
 
 }*process_table[__PID_MAX_LOCAL];
 
+struct lock *process_lock  ;
+
 //struct process *process_table[__PID_MAX_LOCAL];
 
 /* Call once during system startup to allocate data structures. */

@@ -97,8 +97,8 @@ pid_t waitpid(pid_t pid, int *status, int options){
 	{
 		return EINVAL;
 	}
-	int *kernel_status ;
-	int result = copyin((userptr_t)status,kernel_status,sizeof(int *));
+	int kernel_status ;
+	int result = copyin((userptr_t)status,&kernel_status,sizeof(int *));
 	if (result)
 	{
 		return result ;
@@ -122,13 +122,15 @@ pid_t waitpid(pid_t pid, int *status, int options){
 		return ECHILD ;
 	}
 
-
+	lock_acquire(process_table[pid]->exit_lock) ;
 	if(process_table[pid]->exited){ //check whether it is exited.
 		result = copyout(&process_table[pid]->exitcode,(userptr_t)status,sizeof(int)) ;
+		lock_release(process_table[pid]->exit_lock) ;
 		if (result)
 		{
 			return result ;
 		}
+
 		if(pid != 0){
 			lock_destroy(process_table[pid]->exit_lock) ;
 			cv_destroy(process_table[pid]->exit_cv) ;
@@ -136,9 +138,10 @@ pid_t waitpid(pid_t pid, int *status, int options){
 			kfree(process_table[pid]) ;
 			process_table[pid] = NULL ;
 		}
+
 		return -pid;
 	}
-	lock_acquire(process_table[pid]->exit_lock) ;
+//	lock_acquire(process_table[pid]->exit_lock) ;
 	while(!process_table[pid]->exited ){
 		cv_wait(process_table[pid]->exit_cv,process_table[pid]->exit_lock) ;
 	}
@@ -149,14 +152,16 @@ pid_t waitpid(pid_t pid, int *status, int options){
 		return result ;
 	}
 
+	process_table[pid]->currentthread = NULL ;
 	lock_release(process_table[pid]->exit_lock) ;
 	lock_destroy(process_table[pid]->exit_lock) ;
 	cv_destroy(process_table[pid]->exit_cv) ;
-	process_table[pid]->currentthread = NULL ;
+
 	if (pid != 0){
 		kfree(process_table[pid]) ;
 		process_table[pid] = NULL ;
 	}
+
 
 	return -pid;
 }
@@ -335,8 +340,12 @@ pid_t wait_pid(pid_t pid, int *status, int options){
 	*status=process_table[pid]->exitcode;
 	lock_release(process_table[pid]->exit_lock) ;
 	if (pid != 0){
+		lock_destroy(process_table[pid]->exit_lock) ;
+		cv_destroy(process_table[pid]->exit_cv) ;
+		kfree(process_table[pid]) ;
 		process_table[pid] = NULL ;
 	}
+
 
 	return 0;
 }

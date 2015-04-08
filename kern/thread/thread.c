@@ -537,6 +537,7 @@ thread_fork(const char *name,
 	}
 	/* Added initialization for thread_fork - starts*/
 
+	lock_acquire(process_lock) ;
 	int j=2;
 	for(j=2;j<__PID_MAX_LOCAL;j++)
 	{
@@ -547,6 +548,7 @@ thread_fork(const char *name,
 	}
 	if(j == __PID_MAX_LOCAL)
 	{
+		lock_release(process_lock) ;
 		return EAGAIN;
 	}
 	newthread->pid = j ;
@@ -555,10 +557,12 @@ thread_fork(const char *name,
 	process_table[j] = (struct process *)kmalloc(sizeof(struct process)) ;
 	process_table[j]->exit_lock = lock_create("exit-lock") ;
 	process_table[j]->exit_cv = cv_create("exit-cv") ;
-
+	process_table[j]->exited = false ;
 
 	process_table[j]->currentthread = newthread ;
 	process_table[j]->ppid = curthread->pid ;
+
+	lock_release(process_lock) ;
 
 	int i = 0 ;
 

@@ -175,6 +175,7 @@ int sys_write(userptr_t arg1,userptr_t arg2,userptr_t arg3)   //(int userfd, con
 	{
 		lock_release(curthread->fd[userfd]->lock);
 	}
+
 	return -(nbytes-uio.uio_resid);
 }
 

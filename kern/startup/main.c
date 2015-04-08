@@ -127,14 +127,18 @@ boot(void)
 	thread_start_cpus();
 
 	/* Default bootfs - but ignore failure, in case emu0 doesn't exist */
+
 	vfs_setbootfs("emu0");
 
+	process_lock = lock_create("process_lock") ;
 
 	/*
 	 * Make sure various things aren't screwed up.
 	 */
 	COMPILE_ASSERT(sizeof(userptr_t) == sizeof(char *));
 	COMPILE_ASSERT(sizeof(*(userptr_t)0) == sizeof(char));
+
+
 }
 
 /*
