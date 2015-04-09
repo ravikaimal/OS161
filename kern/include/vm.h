@@ -59,13 +59,15 @@ struct coremap {
     short page_free ; // Whether the page is free or not
     short clean ;	// Whether the page is clean or dirty
     uint64_t timestamp;
+    int pages;		//number if continuous pages allocated
     struct coremap *next;
 }*coremap_list;
 
 
 /* Initialization function */
 void vm_bootstrap(void);
-paddr_t page_alloc(void) ;
+paddr_t page_alloc(void);
+paddr_t alloc_npages(int npages);
 /* Fault handling function called by trap code */
 int vm_fault(int faulttype, vaddr_t faultaddress);
 

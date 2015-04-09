@@ -69,8 +69,10 @@ void vm_bootstrap()
 	}
 
 	coremap_list=head;
-
 	vm_initialized = 1 ;
+
+	paddr_t test=alloc_npages(3);
+	(void)test;
 
 }
 
@@ -82,11 +84,13 @@ paddr_t page_alloc()
 	{
 		if(local_coremap->fixed && local_coremap->page_free )
 		{
-			local_coremap->as = curthread->t_addrspace ;
+//			local_coremap->as = curthread->t_addrspace ;
 			local_coremap->page_free = PAGE_NOT_FREE ;
 			local_coremap->timestamp = localtime ;
 			localtime++ ;
 			local_coremap->clean = PAGE_DIRTY ;
+			local_coremap->pages=1;
+			bzero((void *)PADDR_TO_KVADDR(local_coremap->pa),PAGE_SIZE);
 			return local_coremap->pa ;
 		}
 
@@ -107,61 +111,112 @@ paddr_t page_alloc()
 		local_coremap = local_coremap->next ;
 	}
 
-	local_coremap_min->as = curthread->t_addrspace ;
+//	local_coremap_min->as = curthread->t_addrspace ;
 	local_coremap_min->page_free = PAGE_NOT_FREE ;
 	local_coremap_min->timestamp = localtime ;
 	localtime++ ;
 	local_coremap_min->clean = PAGE_DIRTY ;
+	local_coremap->pages=1;
 
 	//Implement Swapping
 	return local_coremap_min->pa ;
 
 }
 
-static
-paddr_t
-getppages(unsigned long npages)
+static paddr_t getppages(unsigned long npages)
 {
 	(void)npages ;
 	paddr_t cc ;
 	return cc;
 }
 
+paddr_t alloc_npages(int npages){
+	struct coremap *local_coremap = coremap_list ;
+	struct coremap *start = coremap_list;
+	int count=0;
+	while(local_coremap->next != NULL && count!=npages){
+		if(!local_coremap->fixed && local_coremap->page_free ){
+			if(count == 0)
+				start = local_coremap;
+			count++;		//increment the number of free continuous pages
+		}
+		else
+			count=0;		//reset the counter
+		local_coremap=local_coremap->next;
+	}
+	if(count == npages){			//found npages continuous pages
+		//change attributes of the pages
+		//bzero all the pages
+		local_coremap=start;
+		count=0;
+		while(count!=npages){
+//			local_coremap->as = curthread->t_addrspace ;
+			local_coremap->page_free = PAGE_NOT_FREE ;
+			local_coremap->timestamp = localtime ;
+			localtime++ ;
+			local_coremap->clean = PAGE_DIRTY ;
+			local_coremap->pages=0;
+			bzero((void *)PADDR_TO_KVADDR(local_coremap->pa),PAGE_SIZE);
+			local_coremap=local_coremap->next;
+			count++;
+		}
+		start->pages=count;
+		return start->pa;
+	}
+	return 0;
+}
+
 /* Allocate/free some kernel-space virtual pages */
-vaddr_t
-alloc_kpages(int npages)
+vaddr_t alloc_kpages(int npages)
 {
 	paddr_t pa;
+	if(vm_initialized){
+		pa=alloc_npages(npages);
+		if(pa==0)
+			return 0;
+	}
+	else{		
+		pa = getppages(npages);
+		if (pa==0) {
+			return 0;
+		}
 
-	pa = getppages(npages);
-	if (pa==0) {
-		return 0;
 	}
 	return PADDR_TO_KVADDR(pa);
 }
 
-void
-free_kpages(vaddr_t addr)
+void free_kpages(vaddr_t addr)					//Clear tlb entries remaining.
 {
-	/* nothing - leak the memory. */
-
-	(void)addr;
+	struct coremap *local_coremap=coremap_list;
+	while(local_coremap->next!=NULL){
+		if(local_coremap->va == addr){
+			break;
+		}
+	}
+	int count=local_coremap->pages;
+	while(count!=0){					//What other fields to reset - timestamp?
+		 local_coremap->page_free = PAGE_FREE ;
+		 local_coremap->clean = PAGE_CLEAN ;
+		 local_coremap->pages=0;
+		 local_coremap=local_coremap->next;
+		 count--;
+	}
 }
 
-void
+	void
 vm_tlbshootdown_all(void)
 {
 	panic("dumbvm tried to do tlb shootdown?!\n");
 }
 
-void
+	void
 vm_tlbshootdown(const struct tlbshootdown *ts)
 {
 	(void)ts;
 	panic("dumbvm tried to do tlb shootdown?!\n");
 }
 
-int
+	int
 vm_fault(int faulttype, vaddr_t faultaddress)
 {
 	(void)faulttype ;
