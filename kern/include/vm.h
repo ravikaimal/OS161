@@ -43,11 +43,29 @@
 #define VM_FAULT_READ        0    /* A read was attempted */
 #define VM_FAULT_WRITE       1    /* A write was attempted */
 #define VM_FAULT_READONLY    2    /* A write to a readonly page was attempted*/
+#define VM_FIXED 0    /* Fixed page - Cannot be swapped*/
+#define VM_NOT_FIXED 1    /* Not Fixed  - Can be swapped*/
+#define PAGE_FREE 1    /* Free page */
+#define PAGE_NOT_FREE 0
+#define PAGE_DIRTY 0
+#define PAGE_CLEAN 1
+
+
+struct coremap {
+    struct addrspace* as;
+    vaddr_t va;
+    paddr_t pa;
+    short fixed;  //Whether the page can be swapped or not
+    short page_free ; // Whether the page is free or not
+    short clean ;	// Whether the page is clean or dirty
+    uint64_t timestamp;
+    struct coremap *next;
+}*coremap_list;
 
 
 /* Initialization function */
 void vm_bootstrap(void);
-
+paddr_t page_alloc(void) ;
 /* Fault handling function called by trap code */
 int vm_fault(int faulttype, vaddr_t faultaddress);
 
@@ -58,6 +76,9 @@ void free_kpages(vaddr_t addr);
 /* TLB shootdown handling called from interprocessor_interrupt */
 void vm_tlbshootdown_all(void);
 void vm_tlbshootdown(const struct tlbshootdown *);
+
+
+
 
 
 #endif /* _VM_H_ */

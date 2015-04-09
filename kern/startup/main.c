@@ -108,6 +108,7 @@ boot(void)
 
 	/* Early initialization. */
 	ram_bootstrap();
+	vm_bootstrap();
 	thread_bootstrap();
 	hardclock_bootstrap();
 	vfs_bootstrap();
@@ -122,7 +123,7 @@ boot(void)
 	kprintf("\n");
 
 	/* Late phase of initialization. */
-	vm_bootstrap();
+
 	kprintf_bootstrap();
 	thread_start_cpus();
 
@@ -131,6 +132,10 @@ boot(void)
 	vfs_setbootfs("emu0");
 
 	process_lock = lock_create("process_lock") ;
+	process_table[0] = (struct process *)kmalloc(sizeof(struct process)) ;
+	process_table[0]->ppid = 0 ;
+	process_table[0]->exit_lock = lock_create("p0lock") ;
+	process_table[0]->exit_cv = cv_create("p0cv") ;
 
 	/*
 	 * Make sure various things aren't screwed up.
