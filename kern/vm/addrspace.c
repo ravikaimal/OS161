@@ -52,6 +52,14 @@ as_create(void)
 	/*
 	 * Initialize as needed.
 	 */
+	as->as_pagedirectory = page_alloc() ;
+	as->heap_start = 0 ;
+	as->heap_end = 0 ;
+	as->code_start = 0;
+	as->code_end = 0 ;
+	as->data_start = 0 ;
+	as->data_end = 0 ;
+	as->stack_top = 0 ;
 
 	return as;
 }

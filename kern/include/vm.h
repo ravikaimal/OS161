@@ -43,8 +43,8 @@
 #define VM_FAULT_READ        0    /* A read was attempted */
 #define VM_FAULT_WRITE       1    /* A write was attempted */
 #define VM_FAULT_READONLY    2    /* A write to a readonly page was attempted*/
-#define VM_FIXED 0    /* Fixed page - Cannot be swapped*/
-#define VM_NOT_FIXED 1    /* Not Fixed  - Can be swapped*/
+#define VM_FIXED 1    /* Fixed page - Cannot be swapped*/
+#define VM_NOT_FIXED 0    /* Not Fixed  - Can be swapped*/
 #define PAGE_FREE 1    /* Free page */
 #define PAGE_NOT_FREE 0
 #define PAGE_DIRTY 0

@@ -502,18 +502,22 @@ thread_fork(const char *name,
 {
 	struct thread *newthread;
 
+	kprintf("\n cp 1 \n") ;
 	newthread = thread_create(name);
 	if (newthread == NULL) {
 		DEBUG(DB_VM, "Out of Memory");
 		return ENOMEM;
 	}
 
+	kprintf("\n cp 2 \n") ;
 	/* Allocate a stack */
 	newthread->t_stack = kmalloc(STACK_SIZE);
+
 	if (newthread->t_stack == NULL) {
 		thread_destroy(newthread);
 		return ENOMEM;
 	}
+	kprintf("\n cp 3 \n") ;
 	thread_checkstack_init(newthread);
 
 	/*
@@ -533,6 +537,9 @@ thread_fork(const char *name,
 	}
 	/* Added initialization for thread_fork - starts*/
 
+	kprintf("\n cp 4 \n") ;
+	int r = 8 ;
+	r = r+ 1 ;
 	lock_acquire(process_lock) ;
 	int j=2;
 	for(j=2;j<__PID_MAX_LOCAL;j++)
@@ -548,6 +555,7 @@ thread_fork(const char *name,
 		return EAGAIN;
 	}
 	newthread->pid = j ;
+	kprintf("\n cp 5 \n") ;
 
 //	kprintf("\n Sysfork : assigning %d\n ",i) ;
 	process_table[j] = (struct process *)kmalloc(sizeof(struct process)) ;
@@ -559,6 +567,7 @@ thread_fork(const char *name,
 	process_table[j]->ppid = curthread->pid ;
 
 	lock_release(process_lock) ;
+	kprintf("\n cp 6 \n") ;
 
 	int i = 0 ;
 
@@ -572,7 +581,7 @@ thread_fork(const char *name,
 		}
 	}
 
-
+	kprintf("\n cp 7 \n") ;
 //	newthread->pid = (pid_t)data2 ;
 
 	/* Initialization for thread_fork  ends*/
@@ -590,6 +599,7 @@ thread_fork(const char *name,
 
 	/* Lock the current cpu's run queue and make the new thread runnable */
 	thread_make_runnable(newthread, false);
+	kprintf("\n cp 8 \n") ;
 
 //	if (data2 != 0)
 //	{

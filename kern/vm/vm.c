@@ -17,6 +17,8 @@ short vm_initialized  = 0;
 uint64_t localtime = 1 ;
 struct lock *coremaplock ;
 
+static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
+
 void vm_bootstrap()
 {
 	paddr_t firstaddr, lastaddr,freeaddr;
@@ -28,17 +30,7 @@ void vm_bootstrap()
 	vm_initialized = 0 ;
 
 	int page_num = 0 ;
-	for (page_num = 1 ; page_num <= total_page_num /2 ; page_num++ )
-	{
-		freeaddr = firstaddr + page_num * sizeof(struct coremap);
-		coremap_list->next = (struct coremap*)PADDR_TO_KVADDR(freeaddr);
-		coremap_list->fixed = VM_FIXED ;
-		coremap_list->page_free = PAGE_FREE ;
-		coremap_list->clean = PAGE_CLEAN ;
-		coremap_list->timestamp = 0 ;
-		coremap_list = coremap_list->next ;
-	}
-	for (page_num = (total_page_num /2)+1 ; page_num < total_page_num ; page_num++ )
+	for (page_num = 1 ; page_num < total_page_num  ; page_num++ )
 	{
 		freeaddr = firstaddr + page_num * sizeof(struct coremap);
 		coremap_list->next = (struct coremap*)PADDR_TO_KVADDR(freeaddr);
@@ -48,6 +40,16 @@ void vm_bootstrap()
 		coremap_list->timestamp = 0 ;
 		coremap_list = coremap_list->next ;
 	}
+//	for (page_num = (total_page_num /2)+1 ; page_num < total_page_num ; page_num++ )
+//	{
+//		freeaddr = firstaddr + page_num * sizeof(struct coremap);
+//		coremap_list->next = (struct coremap*)PADDR_TO_KVADDR(freeaddr);
+//		coremap_list->fixed = VM_NOT_FIXED ;
+//		coremap_list->page_free = PAGE_FREE ;
+//		coremap_list->clean = PAGE_CLEAN ;
+//		coremap_list->timestamp = 0 ;
+//		coremap_list = coremap_list->next ;
+//	}
 	coremap_list->next = NULL;
 	coremap_list->fixed = VM_NOT_FIXED ;
 	coremap_list->page_free = PAGE_FREE ;
@@ -71,9 +73,7 @@ void vm_bootstrap()
 	coremap_list=head;
 	vm_initialized = 1 ;
 
-	paddr_t test=alloc_npages(3);
-	(void)test;
-
+	coremaplock = lock_create("coremaplock") ;
 }
 
 paddr_t page_alloc()
@@ -125,9 +125,14 @@ paddr_t page_alloc()
 
 static paddr_t getppages(unsigned long npages)
 {
-	(void)npages ;
-	paddr_t cc ;
-	return cc;
+	paddr_t addr;
+
+	spinlock_acquire(&stealmem_lock);
+
+	addr = ram_stealmem(npages);
+
+	spinlock_release(&stealmem_lock);
+	return addr;
 }
 
 paddr_t alloc_npages(int npages){
@@ -138,10 +143,12 @@ paddr_t alloc_npages(int npages){
 		if(!local_coremap->fixed && local_coremap->page_free ){
 			if(count == 0)
 				start = local_coremap;
-			count++;		//increment the number of free continuous pages
+			count++;		//increment the number of free colntinuous pages
 		}
 		else
+		{
 			count=0;		//reset the counter
+		}
 		local_coremap=local_coremap->next;
 	}
 	if(count == npages){			//found npages continuous pages
@@ -184,6 +191,8 @@ vaddr_t alloc_kpages(int npages)
 	}
 	return PADDR_TO_KVADDR(pa);
 }
+
+
 
 void free_kpages(vaddr_t addr)					//Clear tlb entries remaining.
 {

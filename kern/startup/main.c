@@ -108,7 +108,8 @@ boot(void)
 
 	/* Early initialization. */
 	ram_bootstrap();
-	vm_bootstrap();
+
+
 	thread_bootstrap();
 	hardclock_bootstrap();
 	vfs_bootstrap();
@@ -123,13 +124,15 @@ boot(void)
 	kprintf("\n");
 
 	/* Late phase of initialization. */
-
+	vm_bootstrap();
 	kprintf_bootstrap();
 	thread_start_cpus();
 
 	/* Default bootfs - but ignore failure, in case emu0 doesn't exist */
 
 	vfs_setbootfs("emu0");
+
+
 
 	process_lock = lock_create("process_lock") ;
 	process_table[0] = (struct process *)kmalloc(sizeof(struct process)) ;
