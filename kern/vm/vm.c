@@ -80,6 +80,8 @@ paddr_t page_alloc()
 {
 	struct coremap *local_coremap = coremap_list ;
 
+	lock_acquire(coremaplock) ;
+
 	while(local_coremap->next != NULL)
 	{
 		if(local_coremap->fixed && local_coremap->page_free )
@@ -91,6 +93,7 @@ paddr_t page_alloc()
 			local_coremap->clean = PAGE_DIRTY ;
 			local_coremap->pages=1;
 			bzero((void *)PADDR_TO_KVADDR(local_coremap->pa),PAGE_SIZE);
+			lock_release(coremaplock) ;
 			return local_coremap->pa ;
 		}
 
@@ -118,6 +121,7 @@ paddr_t page_alloc()
 	local_coremap_min->clean = PAGE_DIRTY ;
 	local_coremap->pages=1;
 
+	lock_release(coremaplock) ;
 	//Implement Swapping
 	return local_coremap_min->pa ;
 
@@ -139,6 +143,8 @@ paddr_t alloc_npages(int npages){
 	struct coremap *local_coremap = coremap_list ;
 	struct coremap *start = coremap_list;
 	int count=0;
+
+	lock_acquire(coremaplock) ;
 	while(local_coremap->next != NULL && count!=npages){
 		if(!local_coremap->fixed && local_coremap->page_free ){
 			if(count == 0)
@@ -168,6 +174,7 @@ paddr_t alloc_npages(int npages){
 			count++;
 		}
 		start->pages=count;
+		lock_release(coremaplock) ;
 		return start->pa;
 	}
 	return 0;
@@ -201,6 +208,7 @@ void free_kpages(vaddr_t addr)					//Clear tlb entries remaining.
 		if(local_coremap->va == addr){
 			break;
 		}
+		local_coremap=local_coremap->next;
 	}
 	int count=local_coremap->pages;
 	while(count!=0){					//What other fields to reset - timestamp?
