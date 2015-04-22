@@ -58,16 +58,23 @@ struct addrspace {
         size_t as_npages2;
         paddr_t as_stackpbase;
 #else
-        /* Put stuff here for your VM system */
-        vaddr_t as_pagedirectory ;
-        vaddr_t heap_start ;
-        vaddr_t heap_end ;
-        vaddr_t stack_top ;
-        vaddr_t code_start ;
-        vaddr_t code_end ;
-        vaddr_t data_start ;
-        vaddr_t data_end ;
+        struct region *regions[15] ;
+        struct page_table_entry *page_table ;
+
 #endif
+};
+
+struct region{
+	vaddr_t region_start ;
+	int npages ;
+	short type ;
+};
+
+struct page_table_entry{
+	vaddr_t va ;
+	paddr_t pa ;
+	short state ;
+	struct page_table_entry *next ;
 };
 
 /*

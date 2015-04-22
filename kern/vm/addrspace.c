@@ -52,14 +52,16 @@ as_create(void)
 	/*
 	 * Initialize as needed.
 	 */
-	as->as_pagedirectory = page_alloc() ;
-	as->heap_start = 0 ;
-	as->heap_end = 0 ;
-	as->code_start = 0;
-	as->code_end = 0 ;
-	as->data_start = 0 ;
-	as->data_end = 0 ;
-	as->stack_top = 0 ;
+//	as->as_pagedirectory = page_alloc() ;
+//	as->heap_start = 0 ;
+//	as->heap_end = 0 ;
+//	as->code_start = 0;
+//	as->code_end = 0 ;
+//	as->data_start = 0 ;
+//	as->data_end = 0 ;
+//	as->stack_top = 0 ;
+
+	as->page_table = (struct page_table_entry*)kmalloc(sizeof(struct page_table_entry)) ;
 
 	return as;
 }
@@ -97,11 +99,8 @@ as_destroy(struct addrspace *as)
 void
 as_activate(struct addrspace *as)
 {
-	/*
-	 * Write this.
-	 */
-
-	(void)as;  // suppress warning until code gets written
+	vm_tlbshootdown_all() ;
+	(void)as ;
 }
 
 /*

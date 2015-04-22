@@ -12,6 +12,7 @@
 #include <vm.h>
 #include <synch.h>
 #include <current.h>
+#include <mips/tlb.h>
 
 short vm_initialized  = 0;
 uint64_t localtime = 1 ;
@@ -220,10 +221,18 @@ void free_kpages(vaddr_t addr)					//Clear tlb entries remaining.
 	}
 }
 
-	void
-vm_tlbshootdown_all(void)
+void vm_tlbshootdown_all(void)
 {
-	panic("dumbvm tried to do tlb shootdown?!\n");
+		int i, spl;
+
+		/* Disable interrupts on this CPU while frobbing the TLB. */
+		spl = splhigh();
+
+		for (i=0; i<NUM_TLB; i++) {
+			tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+		}
+
+		splx(spl);
 }
 
 	void
