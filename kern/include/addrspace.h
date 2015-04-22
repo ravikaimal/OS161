@@ -67,7 +67,7 @@ struct addrspace {
 struct region{
 	vaddr_t region_start ;
 	int npages ;
-	short type ;
+	short type ;		//0-code, 1-data, 2-heap
 };
 
 struct page_table_entry{
@@ -124,6 +124,7 @@ int               as_define_region(struct addrspace *as,
 int               as_prepare_load(struct addrspace *as);
 int               as_complete_load(struct addrspace *as);
 int               as_define_stack(struct addrspace *as, vaddr_t *initstackptr);
+int as_define_heap(struct addrspace *as)
 
 
 /*
