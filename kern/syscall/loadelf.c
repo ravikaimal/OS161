@@ -249,6 +249,12 @@ load_elf(struct vnode *v, vaddr_t *entrypoint)
 		}
 	}
 
+	result = as_define_heap(curthread->t_addrspace);
+	if (result) {
+		return result;
+	}
+
+
 	result = as_prepare_load(curthread->t_addrspace);
 	if (result) {
 		return result;

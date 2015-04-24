@@ -47,6 +47,7 @@ struct vnode;
  *
  * You write this.
  */
+#define N_REGIONS 15
 
 struct addrspace {
 #if OPT_DUMBVM
@@ -58,7 +59,7 @@ struct addrspace {
         size_t as_npages2;
         paddr_t as_stackpbase;
 #else
-        struct region *regions[15] ;
+        struct region *regions[N_REGIONS] ;
         struct page_table_entry *page_table ;
 
 #endif
@@ -67,7 +68,7 @@ struct addrspace {
 struct region{
 	vaddr_t region_start ;
 	int npages ;
-	short type ;		//0-code, 1-data, 2-heap
+	short permissions ;		//0-code, 1-data, 2-heap
 };
 
 struct page_table_entry{
@@ -124,7 +125,7 @@ int               as_define_region(struct addrspace *as,
 int               as_prepare_load(struct addrspace *as);
 int               as_complete_load(struct addrspace *as);
 int               as_define_stack(struct addrspace *as, vaddr_t *initstackptr);
-int as_define_heap(struct addrspace *as)
+int 			  as_define_heap(struct addrspace *as) ;
 
 
 /*

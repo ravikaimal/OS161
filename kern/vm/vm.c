@@ -12,6 +12,7 @@
 #include <vm.h>
 #include <synch.h>
 #include <current.h>
+#include <spl.h>
 #include <mips/tlb.h>
 
 short vm_initialized  = 0;
@@ -235,18 +236,114 @@ void vm_tlbshootdown_all(void)
 		splx(spl);
 }
 
-	void
-vm_tlbshootdown(const struct tlbshootdown *ts)
+void vm_tlbshootdown(const struct tlbshootdown *ts)
 {
 	(void)ts;
 	panic("dumbvm tried to do tlb shootdown?!\n");
 }
 
-	int
-vm_fault(int faulttype, vaddr_t faultaddress)
+int vm_fault(int faulttype, vaddr_t faultaddress)
 {
-	(void)faulttype ;
-	(void)faultaddress ;
+	// Check whether the faultaddress is valid
+	struct addrspace *curaddrspace = curthread->t_addrspace ;
+
+	int i = 0 ;
+	for (i = 0 ; i< N_REGIONS ; i++)
+	{
+		if(curaddrspace->regions[i] != NULL )
+		{
+			vaddr_t region_end = curaddrspace->regions[i]->region_start+(4096*curaddrspace->regions[i]->npages);
+			if (faultaddress >= curaddrspace->regions[i]->region_start && faultaddress <= region_end)
+			{
+				break ;
+			}
+		}
+	}
+
+	if(i == N_REGIONS)
+	{
+		return EINVAL ;
+	}
+
+	//Check whether it is a write to a read only region
+	if((faulttype == VM_FAULT_WRITE) && (curaddrspace->regions[i]->permissions == 0x4 || curaddrspace->regions[i]->permissions == 0x5))
+	{
+		return EINVAL ;
+	}
+
+	faultaddress &= PAGE_FRAME;
+	int spl = splhigh();
+	uint32_t ehi, elo;
+
+	for (i=0; i<NUM_TLB; i++) {
+		tlb_read(&ehi, &elo, i);
+		if (elo & TLBLO_VALID) {
+			continue;
+		}
+		ehi = faultaddress ;
+		elo = page_fault(faultaddress) | TLBLO_DIRTY | TLBLO_VALID;
+		tlb_write(ehi, elo, i);
+		splx(spl);
+		return 0;
+	}
+
+	kprintf("dumbvm: Ran out of TLB entries - cannot handle page fault\n");
+	splx(spl);
+
+
+
 	return 0 ;
+}
+
+paddr_t page_fault(vaddr_t faultaddress)
+{
+	struct page_table_entry *pt_entry = curthread->t_addrspace->page_table ;
+	struct page_table_entry *pt_entry_temp = NULL;
+
+	while(pt_entry != NULL){
+		if(pt_entry->va == faultaddress) // Additional checks to be implemented later
+		{
+			return pt_entry->pa ;
+		}
+		pt_entry_temp = pt_entry ;
+		pt_entry = pt_entry->next ;
+	}
+
+	paddr_t paddr = user_page_alloc() ;
+	struct page_table_entry *pt_entry_temp2 = (struct page_table_entry*)kmalloc(sizeof(struct page_table_entry)) ;
+
+	if (pt_entry_temp != NULL)
+	{
+		pt_entry_temp->next = pt_entry_temp2 ;
+	}
+	else
+	{
+		curthread->t_addrspace->page_table = pt_entry_temp2 ;
+	}
+
+	return paddr ;
+}
+
+
+paddr_t user_page_alloc(){
+	struct coremap *local_coremap = coremap_list ;
+	lock_acquire(coremaplock);
+	paddr_t ret  ;
+	while(local_coremap->next!=NULL){
+		if(local_coremap->page_free){
+			local_coremap->page_free = PAGE_NOT_FREE;
+			local_coremap->timestamp = localtime;
+			localtime++;
+			local_coremap->clean = PAGE_DIRTY ;
+			local_coremap->pages=1;
+			bzero((void *)PADDR_TO_KVADDR(local_coremap->pa),PAGE_SIZE);
+			lock_release(coremaplock) ;
+			ret = local_coremap->pa ;
+			break ;
+		}
+		local_coremap = local_coremap->next ;
+	}
+
+	return ret ;
 }
 

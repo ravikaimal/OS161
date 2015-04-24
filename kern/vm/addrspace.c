@@ -48,20 +48,15 @@ as_create(void)
 	if (as == NULL) {
 		return NULL;
 	}
+	int i = 0;
 
-	/*
-	 * Initialize as needed.
-	 */
-//	as->as_pagedirectory = page_alloc() ;
-//	as->heap_start = 0 ;
-//	as->heap_end = 0 ;
-//	as->code_start = 0;
-//	as->code_end = 0 ;
-//	as->data_start = 0 ;
-//	as->data_end = 0 ;
-//	as->stack_top = 0 ;
+	for (i = 0 ;i<N_REGIONS ; i++)
+	{
+		as->regions[i] = NULL ;
+	}
 
-	as->page_table = (struct page_table_entry*)kmalloc(sizeof(struct page_table_entry)) ;
+	as->page_table = NULL
+			;
 
 	return as;
 }
@@ -118,11 +113,11 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 		 int readable, int writeable, int executable)
 {
 	int i=0;
-	for(i=0;i<15;i++){
+	for(i=0;i<N_REGIONS;i++){
 		if(as->regions[i]==NULL)
 			break;
 	}
-	if(i==15)
+	if(i==N_REGIONS)
 		return EUNIMP;
 	 
 	size_t npages;
@@ -136,41 +131,30 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 	as->regions[i]=(struct region *)kmalloc(sizeof(struct region *));
 	as->regions[i]->region_start=vaddr;
 	as->regions[i]->npages=npages;
-	if(readable && !writeable && executable)
-		as->regions[i]->type=0;
-	else if(readable && writeable && !executable)
-		as->regions[i]->type=1;
+	as->regions[i]->permissions= readable | writeable | executable ;
 	return 0;
-
-//	(void)as;
-//	(void)vaddr;
-//	(void)sz;
-//	(void)readable;
-//	(void)writeable;
-//	(void)executable;
-//	return EUNIMP;
 }
 
 int as_define_heap(struct addrspace *as){
 	vaddr_t max_address=0;
 	int i=0;
-	for(i=0;i<15;i++){
+	for(i=0;i<N_REGIONS;i++){
 		if(as->regions[i] == NULL)
 			continue;
 		if((as->regions[i]->region_start+(4096*as->regions[i]->npages)>max_address)){
 			max_address = as->regions[i]->region_start+(4096*as->regions[i]->npages);
 		}
 	}
-	for(i=0;i<15;i++){
+	for(i=0;i<N_REGIONS;i++){
 		if(as->regions[i] == NULL)
 			break;
 	}
-	if(i==15)
+	if(i==N_REGIONS)
 		return EUNIMP;
 	as->regions[i]=(struct region *)kmalloc(sizeof(struct region *));
-	as->regions[i]->region_start=max_address;				//might need to align this.
-	as->regions[i]->type=2;
-	//How to calculate the number of pages.
+	as->regions[i]->region_start= (max_address & 0xff000 ) + 0x1000 ;
+	as->regions[i]->permissions=6;
+	as->regions[i]->npages = 1 ;
 	return 0;
 }
 
@@ -182,11 +166,19 @@ as_prepare_load(struct addrspace *as)
 	 Set code region as writeable so the code can be written to it.
 	 Allocate pages now as per second approach-what to allocate? and allocate to where?
 	 */
-	int i=15;
+	int i ;
+	for(i=0;i<N_REGIONS;i++){
+		if(as->regions[i]!=NULL && (as->regions[i]->permissions == 0x4 || as->regions[i]->permissions == 0x5))
+		{
+			as->regions[i]->permissions = 0x2 ;
+		}
+	}
 
-	(void)as;
+
 	return 0;
 }
+
+
 
 int
 as_complete_load(struct addrspace *as)
@@ -195,8 +187,13 @@ as_complete_load(struct addrspace *as)
 	 * Write this.
 	 Set code region as read only so no one can modify the code.
 	 */
-
-	(void)as;
+	int i ;
+	for(i=0;i<N_REGIONS;i++){
+		if(as->regions[i]!=NULL && (as->regions[i]->permissions == 0x2 ))
+		{
+			as->regions[i]->permissions = 0x5 ;
+		}
+	}
 	return 0;
 }
 
@@ -206,12 +203,21 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 	/*
 	 * Write this.
 	 */
-
-	(void)as;
+	int i ;
+	for(i=0;i<N_REGIONS;i++){
+		if(as->regions[i] == NULL)
+		{
+			break ;
+		}
+	}
+	as->regions[i]=(struct region *)kmalloc(sizeof(struct region *));
+	as->regions[i]->region_start= USERSTACK - 4096*2 ;
+	as->regions[i]->permissions=6;
+	as->regions[i]->npages = 2 ;
 
 	/* Initial user-level stack pointer */
 	*stackptr = USERSTACK;
-	
+
 	return 0;
 }
 
