@@ -311,6 +311,11 @@ paddr_t page_fault(vaddr_t faultaddress)
 
 	paddr_t paddr = user_page_alloc() ;
 	struct page_table_entry *pt_entry_temp2 = (struct page_table_entry*)kmalloc(sizeof(struct page_table_entry)) ;
+	faultaddress &= PAGE_FRAME ;
+	pt_entry_temp2->va =  faultaddress;
+	pt_entry_temp2->pa =  paddr ;
+	pt_entry_temp2->state = 0 ; // Implement later
+	pt_entry_temp2->next = NULL ;
 
 	if (pt_entry_temp != NULL)
 	{
