@@ -17,6 +17,7 @@
 #include <kern/fcntl.h>
 #include <vfs.h>
 #include <syscall.h>
+#include <vm.h>
 
 pid_t sys_fork(struct trapframe *tf)
 {
@@ -53,6 +54,12 @@ void child_process_entry(void *data1, unsigned long data2)
 	curthread->t_addrspace = (struct addrspace *)data2 ;
 
 	as_activate(curthread->t_addrspace) ;
+
+	struct page_table_entry *page_table_temp2 = curthread->t_addrspace->page_table ;
+
+	while(page_table_temp2 != NULL){
+		page_table_temp2 = page_table_temp2->next ;
+	}
 
 	struct trapframe usertf ;
 
@@ -168,7 +175,7 @@ pid_t waitpid(pid_t pid, int *status, int options){
 
 int execv(const char *program, char **args)
 {
-	kprintf("\n\n execv testing \n\n") ;
+//	kprintf("\n\n execv testing \n\n") ;
 	if (program == NULL )
 	{
 		return EFAULT ;
@@ -369,4 +376,37 @@ void sysexit(int exit_code){
 	lock_release(process_table[pid]->exit_lock) ;
 
 	thread_exit();
+}
+
+vaddr_t sbrk(intptr_t amount)
+{
+
+	int i = 0;
+	vaddr_t ret = 0 ;
+	for (i = 0 ; i<N_REGIONS ;i++)
+	{
+		if (curthread->t_addrspace->regions[i] != NULL && curthread->t_addrspace->regions[i]->permissions == 70)
+		{
+//			ret =  curthread->t_addrspace->regions[i]->region_start +(4096*curthread->t_addrspace->regions[i]->npages);
+			if(amount < PAGE_SIZE)
+			{
+				curthread->t_addrspace->regions[i]->npages = curthread->t_addrspace->regions[i]->npages + 1 ;
+			}
+			else
+			{
+				if(amount % PAGE_SIZE == 0)
+				{
+					curthread->t_addrspace->regions[i]->npages +=  (amount/PAGE_SIZE) ;
+				}
+				else
+				{
+					curthread->t_addrspace->regions[i]->npages +=  (amount/PAGE_SIZE) + 1 ;
+				}
+			}
+		}
+	}
+
+	ret =  curthread->t_addrspace->regions[i]->region_start +(4096*curthread->t_addrspace->regions[i]->npages);
+
+	return -ret ;
 }

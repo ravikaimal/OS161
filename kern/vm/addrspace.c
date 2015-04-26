@@ -55,8 +55,7 @@ as_create(void)
 		as->regions[i] = NULL ;
 	}
 
-	as->page_table = NULL
-			;
+	as->page_table = NULL	;
 
 	return as;
 }
@@ -71,12 +70,51 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		return ENOMEM;
 	}
 
-	/*
-	 * Write this.
-	 */
+	int i =0 ;
 
-	(void)old;
-	
+	for (i = 0 ; i<N_REGIONS ;i++)
+	{
+		if (old->regions[i] != NULL)
+		{
+			newas->regions[i] = (struct region*)kmalloc(sizeof(struct region*)) ;
+			newas->regions[i]->npages = old->regions[i]->npages ;
+			newas->regions[i]->permissions = old->regions[i]->permissions ;
+			newas->regions[i]->region_start = old->regions[i]->region_start ;
+		}
+		else
+		{
+			newas->regions[i] = NULL ;
+		}
+	}
+
+	struct page_table_entry *page_table_temp = old->page_table ;
+	struct page_table_entry *page_table_temp2 = NULL ;
+	struct page_table_entry *page_table_temp3 = NULL ;
+//	struct page_table_entry *page_table_start = NULL ;
+	while(page_table_temp != NULL ){
+		page_table_temp3 = page_table_temp2 ;
+		page_table_temp2 = (struct page_table_entry*)kmalloc(sizeof(struct page_table_entry*)) ;
+		page_table_temp2->pa = user_page_alloc() ;
+//		page_table_temp2->va = PADDR_TO_KVADDR(page_table_temp2->pa) ;
+		memmove((void *)PADDR_TO_KVADDR(page_table_temp2->pa),(const void *)PADDR_TO_KVADDR(page_table_temp->pa),PAGE_SIZE);
+		page_table_temp2->va = page_table_temp->va ;
+		page_table_temp2->state = page_table_temp->state ;
+
+
+		if(page_table_temp3 != NULL)
+		{
+			page_table_temp3->next = page_table_temp2 ;
+		}
+		else
+		{
+			newas->page_table = page_table_temp2 ;
+		}
+
+		page_table_temp = page_table_temp->next ;
+
+	}
+//	newas->page_table = page_table_start
+
 	*ret = newas;
 	return 0;
 }
@@ -88,6 +126,22 @@ as_destroy(struct addrspace *as)
 	 * Clean up as needed.
 	 */
 	
+	int i = 0 ;
+	for(i = 0 ; i < N_REGIONS ; i++)
+	{
+		kfree(as->regions[i]) ;
+	}
+
+	struct page_table_entry * temp1 = as->page_table ;
+	struct page_table_entry * temp2 = as->page_table ;
+
+	while(temp2 != NULL)
+	{
+		temp2 = temp1->next ;
+		kfree(temp1) ;
+		temp1 = temp2 ;
+	}
+
 	kfree(as);
 }
 
@@ -132,6 +186,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 	as->regions[i]->region_start=vaddr;
 	as->regions[i]->npages=npages;
 	as->regions[i]->permissions= readable | writeable | executable ;
+
 	return 0;
 }
 
@@ -152,8 +207,8 @@ int as_define_heap(struct addrspace *as){
 	if(i==N_REGIONS)
 		return EUNIMP;
 	as->regions[i]=(struct region *)kmalloc(sizeof(struct region *));
-	as->regions[i]->region_start= (max_address & 0xff000 ) + 0x1000 ;
-	as->regions[i]->permissions=6;
+	as->regions[i]->region_start= (max_address & 0xfffff000 ) + 0x1000 ;
+	as->regions[i]->permissions= 70 ;//Binary converted value
 	as->regions[i]->npages = 1 ;
 	return 0;
 }
@@ -211,13 +266,14 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 		}
 	}
 	as->regions[i]=(struct region *)kmalloc(sizeof(struct region *));
-	as->regions[i]->region_start= USERSTACK - 4096*2 ;
+	as->regions[i]->region_start= USERSTACK - 4096*4 ;
 	as->regions[i]->permissions=6;
-	as->regions[i]->npages = 2 ;
+	as->regions[i]->npages = 4 ;
 
 	/* Initial user-level stack pointer */
 	*stackptr = USERSTACK;
 
 	return 0;
 }
+
 

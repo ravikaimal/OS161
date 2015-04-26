@@ -83,6 +83,8 @@
  */
 #define USERSTACK     USERSPACETOP
 
+#define ROUNDUPAGAIN(a) (a%10==0?a%10)+1
+
 /*
  * Interface to the low-level module that looks after the amount of
  * physical memory we have.

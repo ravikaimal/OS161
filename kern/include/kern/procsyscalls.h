@@ -18,5 +18,6 @@ pid_t waitpid(pid_t pid, int *status, int options) ;
 int execv(const char *program, char **args) ;
 void sysexit(int exit_code) ;
 pid_t wait_pid(pid_t pid, int *status, int options) ;
+vaddr_t sbrk(intptr_t amount) ;
 
 #endif /* PROCSYSCALLS_H_ */
