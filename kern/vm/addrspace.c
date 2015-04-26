@@ -80,6 +80,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 			newas->regions[i]->npages = old->regions[i]->npages ;
 			newas->regions[i]->permissions = old->regions[i]->permissions ;
 			newas->regions[i]->region_start = old->regions[i]->region_start ;
+			newas->regions[i]->region_end = old->regions[i]->region_end ;
 		}
 		else
 		{
@@ -185,6 +186,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 	as->regions[i]=(struct region *)kmalloc(sizeof(struct region *));
 	as->regions[i]->region_start=vaddr;
 	as->regions[i]->npages=npages;
+	as->regions[i]->region_end= as->regions[i]->region_start+(PAGE_SIZE*as->regions[i]->npages) -1 ;
 	as->regions[i]->permissions= readable | writeable | executable ;
 
 	return 0;
@@ -210,6 +212,7 @@ int as_define_heap(struct addrspace *as){
 	as->regions[i]->region_start= (max_address & 0xfffff000 ) + 0x1000 ;
 	as->regions[i]->permissions= 70 ;//Binary converted value
 	as->regions[i]->npages = 1 ;
+	as->regions[i]->region_end= as->regions[i]->region_start+(PAGE_SIZE*as->regions[i]->npages) - 1;
 	return 0;
 }
 
@@ -269,6 +272,7 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 	as->regions[i]->region_start= USERSTACK - 4096*4 ;
 	as->regions[i]->permissions=6;
 	as->regions[i]->npages = 4 ;
+	as->regions[i]->region_end  = USERSTACK ;
 
 	/* Initial user-level stack pointer */
 	*stackptr = USERSTACK;

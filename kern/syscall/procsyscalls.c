@@ -383,30 +383,32 @@ vaddr_t sbrk(intptr_t amount)
 
 	int i = 0;
 	vaddr_t ret = 0 ;
+	vaddr_t cur_page_end = 0 ;
+	intptr_t amount_in_cur_page = 0 ;
+	intptr_t remain_amount = 0 ;
+	intptr_t amount_in_new_page = 0 ;
+	int extrapages = 0 ;
 	for (i = 0 ; i<N_REGIONS ;i++)
 	{
 		if (curthread->t_addrspace->regions[i] != NULL && curthread->t_addrspace->regions[i]->permissions == 70)
 		{
-//			ret =  curthread->t_addrspace->regions[i]->region_start +(4096*curthread->t_addrspace->regions[i]->npages);
-			if(amount < PAGE_SIZE)
+			ret = curthread->t_addrspace->regions[i]->region_end ;
+			if(amount <= 0)
 			{
-				curthread->t_addrspace->regions[i]->npages = curthread->t_addrspace->regions[i]->npages + 1 ;
+				break ;
 			}
-			else
-			{
-				if(amount % PAGE_SIZE == 0)
-				{
-					curthread->t_addrspace->regions[i]->npages +=  (amount/PAGE_SIZE) ;
-				}
-				else
-				{
-					curthread->t_addrspace->regions[i]->npages +=  (amount/PAGE_SIZE) + 1 ;
-				}
-			}
+			cur_page_end = curthread->t_addrspace->regions[i]->region_start + (PAGE_SIZE * curthread->t_addrspace->regions[i]->npages) - 1 ;
+
+			amount_in_cur_page = cur_page_end - curthread->t_addrspace->regions[i]->region_end ;
+			remain_amount = amount - amount_in_cur_page ;
+			extrapages = remain_amount / PAGE_SIZE ;
+			amount_in_new_page = remain_amount - (PAGE_SIZE * extrapages ) ;
+
+			curthread->t_addrspace->regions[i]->region_end = curthread->t_addrspace->regions[i]->region_end + amount_in_cur_page +
+															 extrapages * PAGE_SIZE + amount_in_new_page ;
 		}
 	}
 
-	ret =  curthread->t_addrspace->regions[i]->region_start +(4096*curthread->t_addrspace->regions[i]->npages);
 
 	return -ret ;
 }

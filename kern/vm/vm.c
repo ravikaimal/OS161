@@ -60,7 +60,7 @@ void vm_bootstrap()
 	coremap_list=head;
 
 	freeaddr = firstaddr + page_num * sizeof(struct coremap);
-	paddr_t page_start = freeaddr & 0xff000 ;
+	paddr_t page_start = freeaddr & 0xfffff000 ;
 	page_start = page_start + 0x1000 ;
 
 
@@ -252,8 +252,8 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
 	{
 		if(curaddrspace->regions[i] != NULL )
 		{
-			vaddr_t region_end = curaddrspace->regions[i]->region_start+(4096*curaddrspace->regions[i]->npages);
-			if (faultaddress >= curaddrspace->regions[i]->region_start && faultaddress <= region_end)
+//			vaddr_t region_end = curaddrspace->regions[i]->region_start+(4096*curaddrspace->regions[i]->npages);
+			if (faultaddress >= curaddrspace->regions[i]->region_start && faultaddress <= curaddrspace->regions[i]->region_end)
 			{
 				break ;
 			}

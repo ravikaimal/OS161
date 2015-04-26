@@ -67,6 +67,7 @@ struct addrspace {
 
 struct region{
 	vaddr_t region_start ;
+	vaddr_t region_end ;
 	int npages ;
 	short permissions ;		//0-code, 1-data, 2-heap
 };
