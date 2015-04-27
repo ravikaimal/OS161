@@ -142,7 +142,7 @@ pid_t waitpid(pid_t pid, int *status, int options){
 
 		return -pid;
 	}
-//	lock_acquire(process_table[pid]->exit_lock) ;
+	//	lock_acquire(process_table[pid]->exit_lock) ;
 	while(!process_table[pid]->exited ){
 		cv_wait(process_table[pid]->exit_cv,process_table[pid]->exit_lock) ;
 	}
@@ -169,7 +169,7 @@ pid_t waitpid(pid_t pid, int *status, int options){
 
 int execv(const char *program, char **args)
 {
-//	kprintf("\n\n execv testing \n\n") ;
+	//	kprintf("\n\n execv testing \n\n") ;
 	if (program == NULL )
 	{
 		return EFAULT ;
@@ -318,7 +318,7 @@ int execv(const char *program, char **args)
 
 		i++ ;
 		if (i<=k){
-		stackptr = stackptr - sizeof(int) ;
+			stackptr = stackptr - sizeof(int) ;
 		}
 
 	}
@@ -394,15 +394,20 @@ vaddr_t sbrk(intptr_t amount)
 			cur_page_end = curthread->t_addrspace->regions[i]->region_start + (PAGE_SIZE * curthread->t_addrspace->regions[i]->npages) - 1 ;
 
 			amount_in_cur_page = cur_page_end - curthread->t_addrspace->heap_end ;
-			remain_amount = amount - amount_in_cur_page ;
-			extrapages = remain_amount / PAGE_SIZE ;
-			amount_in_new_page = remain_amount - (PAGE_SIZE * extrapages ) ;
-
-			curthread->t_addrspace->heap_end = curthread->t_addrspace->heap_end + amount_in_cur_page +
-															 extrapages * PAGE_SIZE + amount_in_new_page ;
+			if(amount<amount_in_cur_page){
+				curthread->t_addrspace->heap_end = curthread->t_addrspace->heap_end + amount;
+				break;
+			}
+			else{
+				remain_amount = amount - amount_in_cur_page ;
+				extrapages = remain_amount / PAGE_SIZE + 1 ;
+				curthread->t_addrspace->regions[i]->npages += extrapages;
+				amount_in_new_page = remain_amount ;    //- (PAGE_SIZE * extrapages ) ;
+				curthread->t_addrspace->heap_end =curthread->t_addrspace->regions[i]->region_start + (PAGE_SIZE * (curthread->t_addrspace->regions[i]->npages-extrapages))
+                                                                                                        		+amount_in_new_page -1;
+				//curthread->t_addrspace->heap_end + amount_in_cur_page + extrapages * PAGE_SIZE + amount_in_new_page ;
+			}
 		}
 	}
-
-
 	return -ret ;
 }

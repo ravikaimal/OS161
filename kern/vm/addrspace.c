@@ -142,7 +142,7 @@ as_destroy(struct addrspace *as)
 	struct page_table_entry * temp1 = as->page_table ;
 	struct page_table_entry * temp2 = as->page_table ;
 
-	while(temp2 != NULL && temp1 != NULL && temp1 != (void *)0xdeadbeef)
+	while(temp2 != NULL && temp1 != NULL )
 	{
 		temp2 = temp1->next ;
 		user_page_free(temp1->pa) ;
@@ -220,7 +220,7 @@ int as_define_heap(struct addrspace *as){
 	as->regions[i]->permissions= 70 ;//Binary converted value
 	as->regions[i]->npages = 1 ;
 //	as->regions[i]->region_end= as->regions[i]->region_start+(PAGE_SIZE*as->regions[i]->npages) - 1;
-	as->heap_end = as->regions[i]->region_start+(PAGE_SIZE*as->regions[i]->npages) - 1; ;
+	as->heap_end = as->regions[i]->region_start ; //+(PAGE_SIZE*as->regions[i]->npages) - 1; ;
 	return 0;
 }
 
