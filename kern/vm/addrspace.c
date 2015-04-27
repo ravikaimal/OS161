@@ -143,7 +143,7 @@ as_destroy(struct addrspace *as)
 	struct page_table_entry * temp2 = as->page_table ;
 //	struct page_table_entry * temp2 = NULL ;
 
-	while(temp2 != NULL &&  temp1->next != (void*)0xdeadbeef)
+	while(temp2 != NULL && temp1 != NULL && temp1->next != (void*)0xdeadbeef)
 	{
 		temp2 = temp1->next ;
 		user_page_free(temp1->pa) ;
