@@ -36,28 +36,15 @@ void vm_bootstrap()
 	{
 		freeaddr = firstaddr + page_num * sizeof(struct coremap);
 		coremap_list->next = (struct coremap*)PADDR_TO_KVADDR(freeaddr);
-		coremap_list->fixed = VM_NOT_FIXED ;
-		coremap_list->page_free = PAGE_FREE ;
-		coremap_list->clean = PAGE_CLEAN ;
+		coremap_list->status = 0x6 ;
 		coremap_list->timestamp = 0 ;
 		coremap_list = coremap_list->next ;
 	}
-//	for (page_num = (total_page_num /2)+1 ; page_num < total_page_num ; page_num++ )
-//	{
-//		freeaddr = firstaddr + page_num * sizeof(struct coremap);
-//		coremap_list->next = (struct coremap*)PADDR_TO_KVADDR(freeaddr);
-//		coremap_list->fixed = VM_NOT_FIXED ;
-//		coremap_list->page_free = PAGE_FREE ;
-//		coremap_list->clean = PAGE_CLEAN ;
-//		coremap_list->timestamp = 0 ;
-//		coremap_list = coremap_list->next ;
-//	}
 	coremap_list->next = NULL;
-	coremap_list->fixed = VM_NOT_FIXED ;
-	coremap_list->page_free = PAGE_FREE ;
-	coremap_list->clean = PAGE_CLEAN ;
+	coremap_list->status = 0x6 ;
 	coremap_list->timestamp = 0 ;
 	coremap_list=head;
+
 
 	freeaddr = firstaddr + page_num * sizeof(struct coremap);
 	paddr_t page_start = freeaddr & 0xfffff000 ;
@@ -71,6 +58,9 @@ void vm_bootstrap()
 		page_start = page_start + 0x1000 ;
 		coremap_list = coremap_list->next ;
 	}
+
+//	kprintf("\n coremap start %p\n",head) ;
+//	kprintf("\n coremap end %p\n",coremap_list) ;
 
 	coremap_list=head;
 	vm_initialized = 1 ;
@@ -86,14 +76,12 @@ paddr_t page_alloc()
 
 	while(local_coremap->next != NULL)
 	{
-		if(local_coremap->fixed && local_coremap->page_free )
+		if((local_coremap->status & 0x3) == 3 )
 		{
-//			local_coremap->as = curthread->t_addrspace ;
-			local_coremap->page_free = PAGE_NOT_FREE ;
 			local_coremap->timestamp = localtime ;
 			localtime++ ;
-			local_coremap->clean = PAGE_DIRTY ;
 			local_coremap->pages=1;
+			local_coremap->status = 1 ;
 			bzero((void *)PADDR_TO_KVADDR(local_coremap->pa),PAGE_SIZE);
 			lock_release(coremaplock) ;
 			return local_coremap->pa ;
@@ -107,7 +95,7 @@ paddr_t page_alloc()
 	struct coremap *local_coremap_min = coremap_list ;
 	while(local_coremap->next != NULL)
 	{
-		if(local_coremap->fixed && local_coremap->timestamp <= mintime  )
+		if(((local_coremap->status & 0x1)== 0x1) && local_coremap->timestamp <= mintime  )
 		{
 			mintime = local_coremap->timestamp ;
 			local_coremap_min = local_coremap ;
@@ -116,11 +104,9 @@ paddr_t page_alloc()
 		local_coremap = local_coremap->next ;
 	}
 
-//	local_coremap_min->as = curthread->t_addrspace ;
-	local_coremap_min->page_free = PAGE_NOT_FREE ;
 	local_coremap_min->timestamp = localtime ;
+	local_coremap_min->status = 1 ;
 	localtime++ ;
-	local_coremap_min->clean = PAGE_DIRTY ;
 	local_coremap->pages=1;
 
 	lock_release(coremaplock) ;
@@ -148,7 +134,7 @@ paddr_t alloc_npages(int npages){
 
 	lock_acquire(coremaplock) ;
 	while(local_coremap->next != NULL && count!=npages){
-		if(!local_coremap->fixed && local_coremap->page_free ){
+		if((local_coremap->status & 0x3) == 2 ){
 			if(count == 0)
 				start = local_coremap;
 			count++;		//increment the number of free colntinuous pages
@@ -165,12 +151,10 @@ paddr_t alloc_npages(int npages){
 		local_coremap=start;
 		count=0;
 		while(count!=npages){
-//			local_coremap->as = curthread->t_addrspace ;
-			local_coremap->page_free = PAGE_NOT_FREE ;
 			local_coremap->timestamp = localtime ;
 			localtime++ ;
-			local_coremap->clean = PAGE_DIRTY ;
 			local_coremap->pages=0;
+			local_coremap->status = 1 ;
 			bzero((void *)PADDR_TO_KVADDR(local_coremap->pa),PAGE_SIZE);
 			local_coremap=local_coremap->next;
 			count++;
@@ -214,9 +198,8 @@ void free_kpages(vaddr_t addr)					//Clear tlb entries remaining.
 	}
 	int count=local_coremap->pages;
 	while(count!=0){					//What other fields to reset - timestamp?
-		 local_coremap->page_free = PAGE_FREE ;
-		 local_coremap->clean = PAGE_CLEAN ;
 		 local_coremap->pages=0;
+		 local_coremap->status = 6 ;
 		 local_coremap=local_coremap->next;
 		 count--;
 	}
@@ -252,8 +235,8 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
 	{
 		if(curaddrspace->regions[i] != NULL )
 		{
-//			vaddr_t region_end = curaddrspace->regions[i]->region_start+(4096*curaddrspace->regions[i]->npages);
-			if (faultaddress >= curaddrspace->regions[i]->region_start && faultaddress <= curaddrspace->regions[i]->region_end)
+			vaddr_t region_end = curaddrspace->regions[i]->region_start+(4096*curaddrspace->regions[i]->npages);
+			if (faultaddress >= curaddrspace->regions[i]->region_start && faultaddress <= region_end)
 			{
 				break ;
 			}
@@ -327,6 +310,7 @@ paddr_t page_fault(vaddr_t faultaddress)
 		curthread->t_addrspace->page_table = pt_entry_temp2 ;
 	}
 
+//	kfree(pt_entry_temp2) ;
 	return paddr ;
 }
 
@@ -336,11 +320,10 @@ paddr_t user_page_alloc(){
 	lock_acquire(coremaplock);
 	paddr_t ret  ;
 	while(local_coremap->next!=NULL){
-		if(local_coremap->page_free){
-			local_coremap->page_free = PAGE_NOT_FREE;
+		if((local_coremap->status & 0x2) == 2){
 			local_coremap->timestamp = localtime;
 			localtime++;
-			local_coremap->clean = PAGE_DIRTY ;
+			local_coremap->status = 0 ;
 			local_coremap->pages=1;
 			bzero((void *)PADDR_TO_KVADDR(local_coremap->pa),PAGE_SIZE);
 			lock_release(coremaplock) ;

@@ -47,7 +47,7 @@ struct vnode;
  *
  * You write this.
  */
-#define N_REGIONS 15
+#define N_REGIONS 8
 
 struct addrspace {
 #if OPT_DUMBVM
@@ -61,14 +61,15 @@ struct addrspace {
 #else
         struct region *regions[N_REGIONS] ;
         struct page_table_entry *page_table ;
+        vaddr_t heap_end ;
 
 #endif
 };
 
 struct region{
 	vaddr_t region_start ;
-	vaddr_t region_end ;
-	int npages ;
+//	vaddr_t heap_end ;
+	short npages ;
 	short permissions ;		//0-code, 1-data, 2-heap
 };
 

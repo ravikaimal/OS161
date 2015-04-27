@@ -52,14 +52,15 @@
 
 
 struct coremap {
-    struct addrspace* as;
+//    struct addrspace* as;
     vaddr_t va;
     paddr_t pa;
-    short fixed;  //Whether the page can be swapped or not
-    short page_free ; // Whether the page is free or not
-    short clean ;	// Whether the page is clean or dirty
-    uint64_t timestamp;
-    int pages;		//number if continuous pages allocated
+//    short fixed;  //Whether the page can be swapped or not
+//    short page_free ; // Whether the page is free or not
+//    short clean ;	// Whether the page is clean or dirty
+    short status ;
+    uint16_t timestamp;
+    short pages;		//number if continuous pages allocated
     struct coremap *next;
 }*coremap_list;
 

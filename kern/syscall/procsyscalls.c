@@ -392,19 +392,19 @@ vaddr_t sbrk(intptr_t amount)
 	{
 		if (curthread->t_addrspace->regions[i] != NULL && curthread->t_addrspace->regions[i]->permissions == 70)
 		{
-			ret = curthread->t_addrspace->regions[i]->region_end ;
+			ret = curthread->t_addrspace->heap_end ;
 			if(amount <= 0)
 			{
 				break ;
 			}
 			cur_page_end = curthread->t_addrspace->regions[i]->region_start + (PAGE_SIZE * curthread->t_addrspace->regions[i]->npages) - 1 ;
 
-			amount_in_cur_page = cur_page_end - curthread->t_addrspace->regions[i]->region_end ;
+			amount_in_cur_page = cur_page_end - curthread->t_addrspace->heap_end ;
 			remain_amount = amount - amount_in_cur_page ;
 			extrapages = remain_amount / PAGE_SIZE ;
 			amount_in_new_page = remain_amount - (PAGE_SIZE * extrapages ) ;
 
-			curthread->t_addrspace->regions[i]->region_end = curthread->t_addrspace->regions[i]->region_end + amount_in_cur_page +
+			curthread->t_addrspace->heap_end = curthread->t_addrspace->heap_end + amount_in_cur_page +
 															 extrapages * PAGE_SIZE + amount_in_new_page ;
 		}
 	}
