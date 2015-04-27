@@ -81,7 +81,7 @@ void vm_tlbshootdown_all(void);
 void vm_tlbshootdown(const struct tlbshootdown *);
 paddr_t user_page_alloc(void) ;
 paddr_t page_fault(vaddr_t faultaddress) ;
-
+void user_page_free(paddr_t pa) ;
 
 
 

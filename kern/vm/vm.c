@@ -189,6 +189,7 @@ vaddr_t alloc_kpages(int npages)
 
 void free_kpages(vaddr_t addr)					//Clear tlb entries remaining.
 {
+//	lock_acquire(coremaplock) ;
 	struct coremap *local_coremap=coremap_list;
 	while(local_coremap->next!=NULL){
 		if(local_coremap->va == addr){
@@ -203,6 +204,7 @@ void free_kpages(vaddr_t addr)					//Clear tlb entries remaining.
 		 local_coremap=local_coremap->next;
 		 count--;
 	}
+//	lock_release(coremaplock) ;
 }
 
 void vm_tlbshootdown_all(void)
@@ -336,3 +338,16 @@ paddr_t user_page_alloc(){
 	return ret ;
 }
 
+void user_page_free(paddr_t pa)                                  //Free user page
+{
+        struct coremap *local_coremap=coremap_list;
+        while(local_coremap->next!=NULL){
+                if(local_coremap->pa == pa){
+                        break;
+                }
+                local_coremap=local_coremap->next;
+        }
+        local_coremap->pages=0;
+        local_coremap->status = 6 ;
+        local_coremap=local_coremap->next;
+}

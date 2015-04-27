@@ -55,12 +55,6 @@ void child_process_entry(void *data1, unsigned long data2)
 
 	as_activate(curthread->t_addrspace) ;
 
-	struct page_table_entry *page_table_temp2 = curthread->t_addrspace->page_table ;
-
-	while(page_table_temp2 != NULL){
-		page_table_temp2 = page_table_temp2->next ;
-	}
-
 	struct trapframe usertf ;
 
 	memcpy(&usertf,tf ,sizeof(struct trapframe ));
