@@ -321,7 +321,7 @@ paddr_t user_page_alloc(){
 	struct coremap *local_coremap = coremap_list ;
 	lock_acquire(coremaplock);
 	paddr_t ret  ;
-	while(local_coremap->next!=NULL){
+	while(local_coremap != NULL){
 		if((local_coremap->status & 0x2) == 2){
 			local_coremap->timestamp = localtime;
 			localtime++;
@@ -330,11 +330,11 @@ paddr_t user_page_alloc(){
 			bzero((void *)PADDR_TO_KVADDR(local_coremap->pa),PAGE_SIZE);
 			lock_release(coremaplock) ;
 			ret = local_coremap->pa ;
-			break ;
+			return ret ;
 		}
 		local_coremap = local_coremap->next ;
 	}
-
+	lock_release(coremaplock) ;
 	return ret ;
 }
 
@@ -347,7 +347,6 @@ void user_page_free(paddr_t pa)                                  //Free user pag
 			local_coremap->pages = 0;
 			local_coremap->status = 6;
 			local_coremap->timestamp = 0;
-//			bzero((void *)PADDR_TO_KVADDR(local_coremap->pa),PAGE_SIZE);
 			lock_release(coremaplock);
 			return;
 		}
