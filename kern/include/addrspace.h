@@ -47,7 +47,7 @@ struct vnode;
  *
  * You write this.
  */
-#define N_REGIONS 15
+#define N_REGIONS 5
 
 struct addrspace {
 #if OPT_DUMBVM
