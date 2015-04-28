@@ -59,8 +59,8 @@ void vm_bootstrap()
 		coremap_list = coremap_list->next ;
 	}
 
-//	kprintf("\n coremap start %p\n",head) ;
-//	kprintf("\n coremap end %p\n",coremap_list) ;
+	//	kprintf("\n coremap start %p\n",head) ;
+	//	kprintf("\n coremap end %p\n",coremap_list) ;
 
 	coremap_list=head;
 	vm_initialized = 1 ;
@@ -189,7 +189,7 @@ vaddr_t alloc_kpages(int npages)
 
 void free_kpages(vaddr_t addr)					//Clear tlb entries remaining.
 {
-//	lock_acquire(coremaplock) ;
+	//	lock_acquire(coremaplock) ;
 	struct coremap *local_coremap=coremap_list;
 	while(local_coremap->next!=NULL){
 		if(local_coremap->va == addr){
@@ -199,26 +199,26 @@ void free_kpages(vaddr_t addr)					//Clear tlb entries remaining.
 	}
 	int count=local_coremap->pages;
 	while(count!=0){					//What other fields to reset - timestamp?
-		 local_coremap->pages=0;
-		 local_coremap->status = 6 ;
-		 local_coremap=local_coremap->next;
-		 count--;
+		local_coremap->pages=0;
+		local_coremap->status = 6 ;
+		local_coremap=local_coremap->next;
+		count--;
 	}
-//	lock_release(coremaplock) ;
+	//	lock_release(coremaplock) ;
 }
 
 void vm_tlbshootdown_all(void)
 {
-		int i, spl;
+	int i, spl;
 
-		/* Disable interrupts on this CPU while frobbing the TLB. */
-		spl = splhigh();
+	/* Disable interrupts on this CPU while frobbing the TLB. */
+	spl = splhigh();
 
-		for (i=0; i<NUM_TLB; i++) {
-			tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
-		}
+	for (i=0; i<NUM_TLB; i++) {
+		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+	}
 
-		splx(spl);
+	splx(spl);
 }
 
 void vm_tlbshootdown(const struct tlbshootdown *ts)
@@ -276,7 +276,7 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
 
 	tlb_random(ehi, elo) ;
 
-//	kprintf("vm: Ran out of TLB entries - cannot handle page fault\n");
+	//	kprintf("vm: Ran out of TLB entries - cannot handle page fault\n");
 	splx(spl);
 	return 0;
 }
@@ -312,7 +312,7 @@ paddr_t page_fault(vaddr_t faultaddress)
 		curthread->t_addrspace->page_table = pt_entry_temp2 ;
 	}
 
-//	kfree(pt_entry_temp2) ;
+	//	kfree(pt_entry_temp2) ;
 	return paddr ;
 }
 
@@ -340,14 +340,18 @@ paddr_t user_page_alloc(){
 
 void user_page_free(paddr_t pa)                                  //Free user page
 {
-        struct coremap *local_coremap=coremap_list;
-        while(local_coremap->next!=NULL){
-                if(local_coremap->pa == pa){
-                        break;
-                }
-                local_coremap=local_coremap->next;
-        }
-        local_coremap->pages=0;
-        local_coremap->status = 6 ;
-        local_coremap=local_coremap->next;
+	struct coremap *local_coremap=coremap_list;
+	lock_acquire(coremaplock);
+	while(local_coremap!=NULL){
+		if(local_coremap->pa == pa){
+			local_coremap->pages = 0;
+			local_coremap->status = 6;
+			local_coremap->timestamp = 0;
+//			bzero((void *)PADDR_TO_KVADDR(local_coremap->pa),PAGE_SIZE);
+			lock_release(coremaplock);
+			return;
+		}
+		local_coremap=local_coremap->next;
+	}
+	lock_release(coremaplock);
 }
