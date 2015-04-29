@@ -6,8 +6,10 @@
  */
 
 #include <types.h>
+
 #include <kern/errno.h>
 #include <lib.h>
+#include <spinlock.h>
 #include <addrspace.h>
 #include <vm.h>
 #include <synch.h>
@@ -15,9 +17,13 @@
 #include <spl.h>
 #include <mips/tlb.h>
 
+
 short vm_initialized  = 0;
 uint64_t localtime = 1 ;
 struct lock *coremaplock ;
+struct spinlock *coremap_spinlock ;
+
+//struct lock *tlblock ;
 
 static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
 
@@ -25,7 +31,9 @@ void vm_bootstrap()
 {
 	paddr_t firstaddr, lastaddr,freeaddr;
 	ram_getsize(&firstaddr, &lastaddr);
-	int total_page_num = (lastaddr - firstaddr)  / PAGE_SIZE;
+	int total_page_num = ((lastaddr - firstaddr) ) / PAGE_SIZE - 1;
+
+
 	coremap_list = (struct coremap*)PADDR_TO_KVADDR(firstaddr);
 	struct coremap *head = coremap_list ;
 
@@ -35,18 +43,20 @@ void vm_bootstrap()
 	for (page_num = 1 ; page_num < total_page_num  ; page_num++ )
 	{
 		freeaddr = firstaddr + page_num * sizeof(struct coremap);
+
 		coremap_list->next = (struct coremap*)PADDR_TO_KVADDR(freeaddr);
 		coremap_list->status = 0x6 ;
 		coremap_list->timestamp = 0 ;
 		coremap_list = coremap_list->next ;
 	}
 	coremap_list->next = NULL;
-	coremap_list->status = 0x6 ;
+	coremap_list->status = 0x10 ;
 	coremap_list->timestamp = 0 ;
 	coremap_list=head;
 
+	size_t sizecm = sizeof(struct coremap ) ;
 
-	freeaddr = firstaddr + page_num * sizeof(struct coremap);
+	freeaddr = firstaddr + page_num * sizecm ;
 	paddr_t page_start = freeaddr & 0xfffff000 ;
 	page_start = page_start + 0x1000 ;
 
@@ -54,7 +64,7 @@ void vm_bootstrap()
 	while(coremap_list->next != NULL)
 	{
 		coremap_list->pa = page_start ;
-		coremap_list->va = PADDR_TO_KVADDR(page_start);
+//		coremap_list->va = PADDR_TO_KVADDR(page_start);
 		page_start = page_start + 0x1000 ;
 		coremap_list = coremap_list->next ;
 	}
@@ -66,24 +76,36 @@ void vm_bootstrap()
 	vm_initialized = 1 ;
 
 	coremaplock = lock_create("coremaplock") ;
+//	coremap_spinlock = spinlock_acquire()
+//	tlblock = lock_create("TLB Lock") ;
 }
 
 paddr_t page_alloc()
 {
 	struct coremap *local_coremap = coremap_list ;
 
-	lock_acquire(coremaplock) ;
+	spinlock_acquire(&stealmem_lock) ;
 
 	while(local_coremap->next != NULL)
 	{
 		if((local_coremap->status & 0x3) == 3 )
 		{
+//			lock_acquire(coremaplock) ;//////////////////////
+
+//			if (!((local_coremap->status & 0x3) == 3))
+//			{
+//				lock_release(coremaplock) ;
+//				continue ;
+//			}
+
 			local_coremap->timestamp = localtime ;
 			localtime++ ;
 			local_coremap->pages=1;
 			local_coremap->status = 1 ;
 			bzero((void *)PADDR_TO_KVADDR(local_coremap->pa),PAGE_SIZE);
-			lock_release(coremaplock) ;
+//			lock_release(coremaplock) ;//////////
+
+			spinlock_release(&stealmem_lock) ;
 			return local_coremap->pa ;
 		}
 
@@ -91,7 +113,7 @@ paddr_t page_alloc()
 	}
 
 	local_coremap = coremap_list ;
-	uint64_t mintime = local_coremap->timestamp ;
+	uint16_t mintime = local_coremap->timestamp ;
 	struct coremap *local_coremap_min = coremap_list ;
 	while(local_coremap->next != NULL)
 	{
@@ -109,7 +131,8 @@ paddr_t page_alloc()
 	localtime++ ;
 	local_coremap->pages=1;
 
-	lock_release(coremaplock) ;
+	spinlock_release(&stealmem_lock) ;
+//	lock_release(coremaplock) ;
 	//Implement Swapping
 	return local_coremap_min->pa ;
 
@@ -132,7 +155,8 @@ paddr_t alloc_npages(int npages){
 	struct coremap *start = coremap_list;
 	int count=0;
 
-	lock_acquire(coremaplock) ;
+//	//lock_acquire(coremaplock) ;
+	spinlock_acquire(&stealmem_lock) ;
 	while(local_coremap->next != NULL && count!=npages){
 		if((local_coremap->status & 0x3) == 2 ){
 			if(count == 0)
@@ -148,6 +172,7 @@ paddr_t alloc_npages(int npages){
 	if(count == npages){			//found npages continuous pages
 		//change attributes of the pages
 		//bzero all the pages
+
 		local_coremap=start;
 		count=0;
 		while(count!=npages){
@@ -160,9 +185,12 @@ paddr_t alloc_npages(int npages){
 			count++;
 		}
 		start->pages=count;
-		lock_release(coremaplock) ;
+		spinlock_release(&stealmem_lock) ;
+//		lock_release(coremaplock) ; ///
 		return start->pa;
 	}
+//	lock_release(coremaplock) ;
+	spinlock_release(&stealmem_lock) ;
 	return 0;
 }
 
@@ -189,22 +217,32 @@ vaddr_t alloc_kpages(int npages)
 
 void free_kpages(vaddr_t addr)					//Clear tlb entries remaining.
 {
-	//	lock_acquire(coremaplock) ;
+	spinlock_acquire(&stealmem_lock) ;
 	struct coremap *local_coremap=coremap_list;
 	while(local_coremap->next!=NULL){
-		if(local_coremap->va == addr){
-			break;
+		if(addr == PADDR_TO_KVADDR(local_coremap->pa) )
+		{
+			break ;
 		}
+
 		local_coremap=local_coremap->next;
 	}
-	int count=local_coremap->pages;
-	while(count!=0){					//What other fields to reset - timestamp?
-		local_coremap->pages=0;
-		local_coremap->status = 6 ;
-		local_coremap=local_coremap->next;
-		count--;
+
+	if (local_coremap != NULL)
+	{
+//		lock_acquire(coremaplock) ; /////
+		int count=local_coremap->pages;
+		while(count!=0){					//What other fields to reset - timestamp?
+			local_coremap->pages=0;
+			local_coremap->status = 6 ;
+			local_coremap=local_coremap->next;
+			count--;
+		}
+//		lock_release(coremaplock) ; ////
 	}
-	//	lock_release(coremaplock) ;
+
+	spinlock_release(&stealmem_lock);
+
 }
 
 void vm_tlbshootdown_all(void)
@@ -296,6 +334,12 @@ paddr_t page_fault(vaddr_t faultaddress)
 	}
 
 	paddr_t paddr = user_page_alloc() ;
+
+	if (paddr == 0)
+	{
+		panic("No Free Pages") ;
+	}
+
 	struct page_table_entry *pt_entry_temp2 = (struct page_table_entry*)kmalloc(sizeof(struct page_table_entry)) ;
 	faultaddress &= PAGE_FRAME ;
 	pt_entry_temp2->va =  faultaddress;
@@ -319,38 +363,46 @@ paddr_t page_fault(vaddr_t faultaddress)
 
 paddr_t user_page_alloc(){
 	struct coremap *local_coremap = coremap_list ;
-	lock_acquire(coremaplock);
-	paddr_t ret  ;
+
+	paddr_t ret  = 0 ;
+	spinlock_acquire(&stealmem_lock) ;
 	while(local_coremap != NULL){
 		if((local_coremap->status & 0x2) == 2){
+//			lock_acquire(coremaplock); ///////////
 			local_coremap->timestamp = localtime;
 			localtime++;
 			local_coremap->status = 0 ;
 			local_coremap->pages=1;
 			bzero((void *)PADDR_TO_KVADDR(local_coremap->pa),PAGE_SIZE);
-			lock_release(coremaplock) ;
+
 			ret = local_coremap->pa ;
+//			lock_release(coremaplock) ; ////////////////
+			spinlock_release(&stealmem_lock);
 			return ret ;
 		}
 		local_coremap = local_coremap->next ;
 	}
-	lock_release(coremaplock) ;
+//	lock_release(coremaplock) ;
+	spinlock_release(&stealmem_lock);
 	return ret ;
 }
 
 void user_page_free(paddr_t pa)                                  //Free user page
 {
 	struct coremap *local_coremap=coremap_list;
-	lock_acquire(coremaplock);
+
+	spinlock_acquire(&stealmem_lock) ;
 	while(local_coremap!=NULL){
 		if(local_coremap->pa == pa){
+//			lock_acquire(coremaplock);
 			local_coremap->pages = 0;
 			local_coremap->status = 6;
 			local_coremap->timestamp = 0;
-			lock_release(coremaplock);
+			spinlock_release(&stealmem_lock);
 			return;
 		}
 		local_coremap=local_coremap->next;
 	}
-	lock_release(coremaplock);
+	spinlock_release(&stealmem_lock) ;
+//	lock_release(coremaplock);
 }

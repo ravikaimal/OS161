@@ -52,7 +52,7 @@
 
 
 struct coremap {
-    vaddr_t va;
+//    vaddr_t va;
     paddr_t pa;
     short status ;
     uint16_t timestamp;
