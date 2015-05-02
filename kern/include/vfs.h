@@ -117,8 +117,6 @@ int vfs_chdir(char *path);
 int vfs_getcwd(struct uio *buf);
 
 int swap_bootstrap(void) ;
-int64_t write_to_swap(vaddr_t page) ;
-int read_from_disk(vaddr_t page,off_t offset) ;
 /*
  * Misc
  *

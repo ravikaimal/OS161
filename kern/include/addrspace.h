@@ -48,6 +48,8 @@ struct vnode;
  * You write this.
  */
 #define N_REGIONS 5
+#define PAGE_ON_DISK 1
+#define PAGE_IN_MEMORY 0
 
 struct addrspace {
 #if OPT_DUMBVM
@@ -77,6 +79,7 @@ struct page_table_entry{
 	vaddr_t va ;
 	paddr_t pa ;
 	short state ;
+	off_t offset ;
 	struct page_table_entry *next ;
 };
 
