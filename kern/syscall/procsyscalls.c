@@ -18,6 +18,7 @@
 #include <vfs.h>
 #include <syscall.h>
 #include <vm.h>
+#include <limits.h>
 
 pid_t sys_fork(struct trapframe *tf)
 {
@@ -55,6 +56,12 @@ void child_process_entry(void *data1, unsigned long data2)
 
 	as_activate(curthread->t_addrspace) ;
 
+	//struct page_table_entry *page_table_temp2 = curthread->t_addrspace->page_table ;
+
+	//while(page_table_temp2 != NULL){
+	//	page_table_temp2 = page_table_temp2->next ;
+	//}
+
 	struct trapframe usertf ;
 
 	memcpy(&usertf,tf ,sizeof(struct trapframe ));
@@ -76,7 +83,7 @@ void sys_exit(int exit_code){
 	process_table[pid]->exited = true ;
 	process_table[pid]->exitcode=_MKWAIT_EXIT(exit_code);
 	int i=0;
-	for(i=0;i<__OPEN_MAX;i++){
+	for(i=0;i<OPEN_MAX_LOCAL;i++){
 		if(curthread->fd[i] != NULL)
 		{
 			sys_close((userptr_t)i);
@@ -142,7 +149,7 @@ pid_t waitpid(pid_t pid, int *status, int options){
 
 		return -pid;
 	}
-	//	lock_acquire(process_table[pid]->exit_lock) ;
+//	lock_acquire(process_table[pid]->exit_lock) ;
 	while(!process_table[pid]->exited ){
 		cv_wait(process_table[pid]->exit_cv,process_table[pid]->exit_lock) ;
 	}
@@ -169,13 +176,15 @@ pid_t waitpid(pid_t pid, int *status, int options){
 
 int execv(const char *program, char **args)
 {
-	//	kprintf("\n\n execv testing \n\n") ;
+//	kprintf("\n\n execv testing \n\n") ;
 	if (program == NULL )
 	{
 		return EFAULT ;
 	}
 
-	char * kernel_pgm = (char *)kmalloc(sizeof(char *)) ;
+	//char * kernel_pgm = (char *)kmalloc(sizeof(char *)) ;
+	char * kernel_pgm = (char *)kmalloc(__PATH_MAX) ;
+
 	size_t bytes_copied  ;
 
 	int result = copyinstr((const userptr_t)program,kernel_pgm,__PATH_MAX,&bytes_copied) ;
@@ -318,7 +327,7 @@ int execv(const char *program, char **args)
 
 		i++ ;
 		if (i<=k){
-			stackptr = stackptr - sizeof(int) ;
+		stackptr = stackptr - sizeof(int) ;
 		}
 
 	}
@@ -358,7 +367,7 @@ void sysexit(int exit_code){
 	process_table[pid]->exitcode=_MKWAIT_EXIT(exit_code);
 	//close file descriptors
 	int i=0;
-	for(i=0;i<__OPEN_MAX;i++){
+	for(i=0;i<OPEN_MAX_LOCAL;i++){
 		if(curthread->fd[i] != NULL)
 		{
 			sys_close((userptr_t)i);
@@ -402,9 +411,9 @@ vaddr_t sbrk(intptr_t amount)
 				remain_amount = amount - amount_in_cur_page ;
 				extrapages = remain_amount / PAGE_SIZE + 1 ;
 				curthread->t_addrspace->regions[i]->npages += extrapages;
-				amount_in_new_page = remain_amount ;    //- (PAGE_SIZE * extrapages ) ;
+				amount_in_new_page = remain_amount ;	//- (PAGE_SIZE * extrapages ) ;
 				curthread->t_addrspace->heap_end =curthread->t_addrspace->regions[i]->region_start + (PAGE_SIZE * (curthread->t_addrspace->regions[i]->npages-extrapages))
-                                                                                                        		+amount_in_new_page -1;
+													+amount_in_new_page -1;
 				//curthread->t_addrspace->heap_end + amount_in_cur_page + extrapages * PAGE_SIZE + amount_in_new_page ;
 			}
 		}

@@ -100,7 +100,7 @@ runprogram(char *progname,char **args)
 	}
 
 	char *path = kstrdup("con:");
-	curthread->fd[0] = (struct filehandle *)kmalloc(sizeof(struct filehandle *));
+	curthread->fd[0] = (struct filehandle *)kmalloc(sizeof(struct filehandle));
 	result = vfs_open(path, O_RDONLY, 0664, &(curthread->fd[0]->vnode)) ;
 	if (result != 0)
 	{
@@ -112,7 +112,7 @@ runprogram(char *progname,char **args)
 
 	char *path1 = kstrdup("con:");
 
-	curthread->fd[1] = (struct filehandle *)kmalloc(sizeof(struct filehandle *));
+	curthread->fd[1] = (struct filehandle *)kmalloc(sizeof(struct filehandle ));
 	result = vfs_open(path1, O_WRONLY, 0664, &(curthread->fd[1]->vnode)) ;
 	if (result != 0)
 	{
@@ -124,7 +124,7 @@ runprogram(char *progname,char **args)
 
 	char *path2 = kstrdup("con:");
 
-	curthread->fd[2] = (struct filehandle *)kmalloc(sizeof(struct filehandle *));
+	curthread->fd[2] = (struct filehandle *)kmalloc(sizeof(struct filehandle ));
 	result = vfs_open(path2, O_WRONLY, 0664, &(curthread->fd[2]->vnode)) ;
 	curthread->fd[2]->referenceCount = 1 ;
 	if (result != 0)

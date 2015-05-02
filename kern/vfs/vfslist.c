@@ -43,6 +43,10 @@
 #include <fs.h>
 #include <vnode.h>
 #include <device.h>
+#include <kern/fcntl.h>
+#include <vm.h>
+#include <uio.h>
+#include <kern/stat.h>
 
 /*
  * Structure for a single named device.
@@ -91,6 +95,7 @@ static struct knowndevarray *knowndevs;
 static struct lock *vfs_biglock;
 static unsigned vfs_biglock_depth;
 
+off_t global_offset = 0 ;
 
 /*
  * Setup function
@@ -110,6 +115,49 @@ vfs_bootstrap(void)
 	vfs_biglock_depth = 0;
 
 	devnull_create();
+
+}
+
+int swap_bootstrap()
+{
+	char *path = kstrdup("lhd0raw:");
+	int fileopen = vfs_open(path,O_RDWR,0,&swap_file ) ;
+	return fileopen ;
+}
+
+off_t write_to_swap(vaddr_t page)
+{
+	struct uio uio ;
+	struct iovec iovec ;
+
+	uio_kinit(&iovec,&uio,(void * )page,PAGE_SIZE,global_offset,UIO_WRITE);
+
+	int result=VOP_WRITE(swap_file,&uio);
+
+	if(result)
+	{
+		return result;
+	}
+
+	global_offset = global_offset + uio.uio_offset ;
+	return uio.uio_offset;
+}
+
+int read_from_disk(vaddr_t page,off_t offset)
+{
+	struct uio uio ;
+	struct iovec iovec;
+
+	uio_kinit(&iovec,&uio,(void *)page,PAGE_SIZE,offset,UIO_READ);
+
+	int result = VOP_READ(swap_file,&uio);
+	if(result)
+	{
+		return result;
+	}
+
+	return 0 ;
+
 }
 
 /*

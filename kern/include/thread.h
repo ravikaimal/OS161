@@ -39,6 +39,7 @@
 #include <spinlock.h>
 #include <threadlist.h>
 #include <kern/limits.h>
+#include<limits.h>
 
 struct addrspace;
 struct cpu;
@@ -118,7 +119,7 @@ struct thread {
 
 	/* add more here as needed */
 	/* Added for ASST2 - to keep the file descriptors opened by a process.*/
-	struct filehandle *fd[__OPEN_MAX] ;
+	struct filehandle *fd[OPEN_MAX_LOCAL] ;
 
 	pid_t pid;
 

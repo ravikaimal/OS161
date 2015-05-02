@@ -46,6 +46,8 @@ struct device; /* abstract structure for a device (dev.h) */
 struct fs;     /* abstract structure for a filesystem (fs.h) */
 struct vnode;  /* abstract structure for an on-disk file (vnode.h) */
 
+struct vnode *swap_file; //Swap file
+
 /*
  * VFS layer low-level operations. 
  * See vnode.h for direct operations on vnodes.
@@ -114,6 +116,9 @@ int vfs_rename(char *oldpath, char *newpath);
 int vfs_chdir(char *path);
 int vfs_getcwd(struct uio *buf);
 
+int swap_bootstrap(void) ;
+int64_t write_to_swap(vaddr_t page) ;
+int read_from_disk(vaddr_t page,off_t offset) ;
 /*
  * Misc
  *

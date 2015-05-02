@@ -140,12 +140,19 @@ boot(void)
 	process_table[0]->exit_lock = lock_create("p0lock") ;
 	process_table[0]->exit_cv = cv_create("p0cv") ;
 
+
 	/*
 	 * Make sure various things aren't screwed up.
 	 */
 	COMPILE_ASSERT(sizeof(userptr_t) == sizeof(char *));
 	COMPILE_ASSERT(sizeof(*(userptr_t)0) == sizeof(char));
 
+	int result = swap_bootstrap() ; // Initialize the swap file
+
+	if (result)
+	{
+		panic("Swap Initialization Failed") ;
+	}
 
 }
 

@@ -49,6 +49,7 @@
 #include <kern/fcntl.h>
 #include <vfs.h>
 #include <vnode.h>
+#include <limits.h>
 
 #include "opt-synchprobs.h"
 #include "opt-defaultscheduler.h"
@@ -571,7 +572,7 @@ thread_fork(const char *name,
 
 	int i = 0 ;
 
-	for (i=0 ; i<__OPEN_MAX ;i++)
+	for (i=0 ; i<OPEN_MAX_LOCAL ;i++)
 	{
 		newthread->fd[i] = curthread->fd[i] ;
 

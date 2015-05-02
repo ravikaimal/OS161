@@ -19,6 +19,7 @@
 #include <kern/stat.h>
 #include <uio.h>
 #include <vnode.h>
+#include <limits.h>
 
 
 
@@ -30,7 +31,9 @@ int sys_open(userptr_t file_name,userptr_t flags,userptr_t mode)
 	{
 		return EFAULT ;
 	}
-	char * k_file_name =(char*)kmalloc(sizeof(char *));
+	//char * k_file_name =(char*)kmalloc(sizeof(char *));
+	char * k_file_name =(char*)kmalloc(length);
+
 
 	size_t buflen ;
 	int open_flags = (int)flags ;
@@ -49,19 +52,20 @@ int sys_open(userptr_t file_name,userptr_t flags,userptr_t mode)
 
 	int i = 3 ;
 
-	for (i = 3; i<__OPEN_MAX ; i++)
+	for (i = 3; i<OPEN_MAX_LOCAL ; i++)
 	{
 		if (curthread->fd[i] == NULL)
 		{
 			break ;
 		}
 	}
-	if (i == __OPEN_MAX)
+	if (i == OPEN_MAX_LOCAL)
 	{
+		panic("sys_open: Max number of files allocated\n");
 		return EMFILE ;
 	}
 
-	curthread->fd[i] = (struct filehandle*)kmalloc(sizeof(struct filehandle*)) ;
+	curthread->fd[i] = (struct filehandle*)kmalloc(sizeof(struct filehandle)) ;
 
 	result = vfs_open(k_file_name, open_flags, 0, &(curthread->fd[i]->vnode)) ;
 
@@ -104,8 +108,9 @@ int sys_read(userptr_t arg1,
 		userptr_t arg2,userptr_t arg3)
 {
 	int userfd = (int)arg1 ;
-	if (userfd > __OPEN_MAX || userfd < 0)
+	if (userfd > OPEN_MAX_LOCAL || userfd < 0)
 	{
+		panic("sys_open: Invalid userfd\n");
 		return EBADF ;
 	}
 	size_t buflen = (size_t)arg3;
@@ -142,8 +147,9 @@ int sys_read(userptr_t arg1,
 int sys_write(userptr_t arg1,userptr_t arg2,userptr_t arg3)   //(int userfd, const void *buf, size_t nbytes){
 {
 	int userfd = (int)arg1;
-	if (userfd > __OPEN_MAX || userfd < 0)
+	if (userfd > OPEN_MAX_LOCAL || userfd < 0)
 	{
+		panic("sys_write: Invalud userfd\n");
 		return EBADF ;
 	}
 	size_t nbytes = (size_t)arg3;
@@ -185,8 +191,9 @@ off_t sys_lseek(userptr_t arg1,userptr_t arg2,userptr_t arg3,userptr_t arg4)
 {
 
 	int userfd = (int)arg1 ;
-	if (userfd > __OPEN_MAX || userfd < 0 )
+	if (userfd > OPEN_MAX_LOCAL || userfd < 0 )
 	{
+		panic("sys_lseek : Invalid userfd");
 		return EBADF ;
 	}
 	int pos1 = (int)arg2 ;
@@ -277,14 +284,16 @@ int sys_dup2(userptr_t userpointer1,userptr_t userpointer2){
 	int oldfd = (int)userpointer1;
 	int newfd = (int)userpointer2;
 
-	if (oldfd >= __OPEN_MAX || newfd >= __OPEN_MAX || newfd < 0 || oldfd < 0)
+	if (oldfd >= OPEN_MAX_LOCAL || newfd >= OPEN_MAX_LOCAL || newfd < 0 || oldfd < 0)
 	{
+		panic("sys_dup2 : Invalid userfd\n");
 		return EBADF ;
 	}
 	if(curthread->fd[oldfd] == NULL){
 		return EBADF;
 	}
-	if(newfd>__OPEN_MAX){
+	if(newfd>OPEN_MAX_LOCAL){
+		panic("sys_dup2 : Invalid newfd\n");
 		return EBADF;
 	}
 	if(curthread->fd[newfd]!=NULL)	//already open
@@ -293,7 +302,7 @@ int sys_dup2(userptr_t userpointer1,userptr_t userpointer2){
 	}
 	else
 	{
-		curthread->fd[newfd]=(struct filehandle *)kmalloc(sizeof(struct filehandle *));
+		curthread->fd[newfd]=(struct filehandle *)kmalloc(sizeof(struct filehandle ));
 	}
 	curthread->fd[newfd]=curthread->fd[oldfd];
 	curthread->fd[oldfd]->referenceCount++ ;
@@ -310,8 +319,9 @@ int sys_close(userptr_t userpointer)
 	int userfd = (int)userpointer;
 
 
-	if (userfd > __OPEN_MAX || userfd < 0)
+	if (userfd > OPEN_MAX_LOCAL || userfd < 0)
 	{
+		panic("sys_close : Invalid userfd\n");
 		return EBADF ;
 	}
 
@@ -362,7 +372,8 @@ int sys__getcwd(userptr_t userpointer1,userptr_t userpointer2){	//char *buf, siz
 }
 
 int sys_chdir(userptr_t userpointer1){ //int sys_chdir(const char *pathname){
-	char *kernel_buffer=(char *)kmalloc(sizeof(char *));
+	//char *kernel_buffer=(char *)kmalloc(sizeof(char *));
+	char *kernel_buffer=(char *)kmalloc(__PATH_MAX);
 	int result = copyin((userptr_t)userpointer1,kernel_buffer,sizeof(userpointer1));
 	if(result)
 			return result;

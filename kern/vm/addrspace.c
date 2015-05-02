@@ -32,6 +32,9 @@
 #include <lib.h>
 #include <addrspace.h>
 #include <vm.h>
+#include <spl.h>
+#include <mips/tlb.h>
+
 
 /*
  * Note! If OPT_DUMBVM is set, as is the case until you start the VM
@@ -67,6 +70,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 
 	newas = as_create();
 	if (newas==NULL) {
+		panic("as_copy - Could not create a new addrspac.\n");
 		return ENOMEM;
 	}
 
@@ -76,29 +80,37 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 	{
 		if (old->regions[i] != NULL)
 		{
-			newas->regions[i] = (struct region*)kmalloc(sizeof(struct region*)) ;
+			newas->regions[i] = (struct region*)kmalloc(sizeof(struct region)) ;
 			newas->regions[i]->npages = old->regions[i]->npages ;
 			newas->regions[i]->permissions = old->regions[i]->permissions ;
 			newas->regions[i]->region_start = old->regions[i]->region_start ;
 //			newas->regions[i]->region_end = old->regions[i]->region_end ;
-			newas->heap_end  = old->heap_end ;
+			//newas->heap_end  = old->heap_end ;
 		}
 		else
 		{
 			newas->regions[i] = NULL ;
 		}
 	}
-
+	newas->heap_end  = old->heap_end ;
 	struct page_table_entry *page_table_temp = old->page_table ;
 	struct page_table_entry *page_table_temp2 = NULL ;
 	struct page_table_entry *page_table_temp3 = NULL ;
+//	struct page_table_entry *page_table_start = NULL ;
 	while(page_table_temp != NULL ){
 		page_table_temp3 = page_table_temp2 ;
-		page_table_temp2 = (struct page_table_entry*)kmalloc(sizeof(struct page_table_entry*)) ;
+//		if (page_table_temp2 != NULL)
+//		{
+//			kfree(page_table_temp2) ;
+//		}
+		page_table_temp2 = (struct page_table_entry*)kmalloc(sizeof(struct page_table_entry)) ;
 		page_table_temp2->pa = user_page_alloc() ;
+//		page_table_temp2->va = PADDR_TO_KVADDR(page_table_temp2->pa) ;
 		memmove((void *)PADDR_TO_KVADDR(page_table_temp2->pa),(const void *)PADDR_TO_KVADDR(page_table_temp->pa),PAGE_SIZE);
 		page_table_temp2->va = page_table_temp->va ;
 		page_table_temp2->state = page_table_temp->state ;
+		page_table_temp2->next = NULL;
+
 
 		if(page_table_temp3 != NULL)
 		{
@@ -112,7 +124,9 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		page_table_temp = page_table_temp->next ;
 
 	}
-	page_table_temp2->next = NULL ;
+	page_table_temp2->next = NULL;
+//	kfree(page_table_temp2) ;
+//	newas->page_table = page_table_start
 
 	*ret = newas;
 	return 0;
@@ -124,32 +138,34 @@ as_destroy(struct addrspace *as)
 	/*
 	 * Clean up as needed.
 	 */
-	
+	//We should free the pages as well.	
 	int i = 0 ;
 	for(i = 0 ; i < N_REGIONS ; i++)
 	{
 		kfree(as->regions[i]) ;
 	}
-
+	
 	struct page_table_entry * temp1 = as->page_table ;
-//	struct page_table_entry * temp2 = as->page_table ;
-	struct page_table_entry * temp2 = NULL ;
+	struct page_table_entry * temp2 ; //= as->page_table;
 
-//	while(temp2 != NULL && temp1 != NULL && temp1->next != (void*)0xdeadbeef)
-//	{
-//		temp2 = temp1->next ;
-//		user_page_free(temp1->pa) ;
-//		kfree(temp1) ;
-//		temp1 = temp2 ;
-//	}
-
-	while(temp1 != NULL && temp1->next != NULL )
-	{
-		temp2 = temp1->next ;
-		user_page_free(temp1->pa) ;
-		kfree(temp1) ;
-		temp1 = temp2 ;
+	while(temp1!=NULL){
+		temp2=temp1;
+		temp1=temp1->next;
+		user_page_free(temp2->pa);
+		kfree(temp2);
 	}
+	//while(temp2 != NULL /*&& temp1->next != NULL&& temp1->next != (void*)0xdeadbeef*/)
+	//{
+	//	if(temp1->next == NULL){
+	//		user_page_free(temp1->pa);
+	//		kfree(temp1);
+	//		break;
+	//	}
+	//	temp2 = temp1->next ;
+	//	user_page_free(temp1->pa);
+	//	kfree(temp1) ;
+	//	temp1 = temp2 ;
+	//}
 
 	kfree(as);
 }
@@ -157,7 +173,15 @@ as_destroy(struct addrspace *as)
 void
 as_activate(struct addrspace *as)
 {
-	vm_tlbshootdown_all() ;
+	int i, spl;
+	/* Disable interrupts on this CPU while frobbing the TLB. */
+	spl = splhigh();
+	for (i=0; i<NUM_TLB; i++) {
+		tlb_write(TLBHI_INVALID(i), TLBLO_INVALID(), i);
+	}
+	splx(spl);
+
+	//vm_tlbshootdown_all() ;
 	(void)as ;
 }
 
@@ -180,8 +204,10 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 		if(as->regions[i]==NULL)
 			break;
 	}
-	if(i==N_REGIONS)
+	if(i==N_REGIONS){
+		panic("as_define_region - Cannot find NULL region\n");
 		return EUNIMP;
+	}
 	 
 	size_t npages;
 	/* Align the region. First, the base... */
@@ -191,7 +217,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 	sz = (sz + PAGE_SIZE - 1) & PAGE_FRAME;
 	npages = sz / PAGE_SIZE;
 
-	as->regions[i]=(struct region *)kmalloc(sizeof(struct region *));
+	as->regions[i]=(struct region *)kmalloc(sizeof(struct region));
 	as->regions[i]->region_start=vaddr;
 	as->regions[i]->npages=npages;
 //	as->regions[i]->region_end= as->regions[i]->region_start+(PAGE_SIZE*as->regions[i]->npages) -1 ;
@@ -214,14 +240,16 @@ int as_define_heap(struct addrspace *as){
 		if(as->regions[i] == NULL)
 			break;
 	}
-	if(i==N_REGIONS)
-		return EUNIMP;
-	as->regions[i]=(struct region *)kmalloc(sizeof(struct region *));
+	if(i==N_REGIONS){
+	                panic("as_define_region - Cannot find NULL region\n");
+			return EUNIMP;
+	}
+	as->regions[i]=(struct region *)kmalloc(sizeof(struct region ));
 	as->regions[i]->region_start= (max_address & 0xfffff000 ) + 0x1000 ;
 	as->regions[i]->permissions= 70 ;//Binary converted value
 	as->regions[i]->npages = 1 ;
 //	as->regions[i]->region_end= as->regions[i]->region_start+(PAGE_SIZE*as->regions[i]->npages) - 1;
-	as->heap_end = as->regions[i]->region_start ; //+(PAGE_SIZE*as->regions[i]->npages) - 1; ;
+	as->heap_end = as->regions[i]->region_start; //	+(PAGE_SIZE*as->regions[i]->npages) - 1;
 	return 0;
 }
 
@@ -277,7 +305,7 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 			break ;
 		}
 	}
-	as->regions[i]=(struct region *)kmalloc(sizeof(struct region *));
+	as->regions[i]=(struct region *)kmalloc(sizeof(struct region ));
 	as->regions[i]->region_start= USERSTACK - 4096*4 ;
 	as->regions[i]->permissions=6;
 	as->regions[i]->npages = 4 ;
