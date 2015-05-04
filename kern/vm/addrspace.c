@@ -109,6 +109,7 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		memmove((void *)PADDR_TO_KVADDR(page_table_temp2->pa),(const void *)PADDR_TO_KVADDR(page_table_temp->pa),PAGE_SIZE);
 		page_table_temp2->va = page_table_temp->va ;
 		page_table_temp2->state = page_table_temp->state ;
+		page_table_temp2->offset = page_table_temp->offset;
 		page_table_temp2->next = NULL;
 
 

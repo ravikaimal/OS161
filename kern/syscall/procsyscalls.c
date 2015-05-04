@@ -176,17 +176,15 @@ pid_t waitpid(pid_t pid, int *status, int options){
 
 int execv(const char *program, char **args)
 {
-//	kprintf("\n\n execv testing \n\n") ;
-	if (program == NULL )
-	{
+	//    kprintf("\n\n execv testing \n\n") ;
+    	if (program == NULL )
+        {
 		return EFAULT ;
 	}
-
 	//char * kernel_pgm = (char *)kmalloc(sizeof(char *)) ;
 	char * kernel_pgm = (char *)kmalloc(__PATH_MAX) ;
-
+	
 	size_t bytes_copied  ;
-
 	int result = copyinstr((const userptr_t)program,kernel_pgm,__PATH_MAX,&bytes_copied) ;
 
 	if (result )
@@ -198,22 +196,19 @@ int execv(const char *program, char **args)
 	{
 		return EINVAL ;
 	}
-
 	if (strlen(kernel_pgm) >= __PATH_MAX)
 	{
 		return ENAMETOOLONG ;
 	}
 	int argc = 0 ;
-
 	if (args == NULL)
 	{
 		return EFAULT ;
 	}
-
-	while (true)
+	while(args[argc]!=NULL)							//while (true)
 	{
-		char *temp = (char *)kmalloc(25*sizeof(char)) ;
-		result = copyinstr((const userptr_t)args[argc],temp,25*sizeof(char),&bytes_copied) ;
+		char *temp = (char *)kmalloc(ARG_MAX*sizeof(char)) ;
+		result = copyinstr((const userptr_t)args[argc],temp,ARG_MAX*sizeof(char),&bytes_copied) ;
 		if (result)
 		{
 			break ;
@@ -221,35 +216,37 @@ int execv(const char *program, char **args)
 		argc++ ;
 		kfree(temp) ;
 	}
-
-
 	char **temp = (char **)kmalloc(argc*sizeof(char *)) ;
-
+	
 	int i = 0 ;
-
-
 	while(i<argc)
 	{
-		temp[i] = (char *)kmalloc(25*sizeof(char)) ;
-		result = copyinstr((const userptr_t)args[i],temp[i],25*sizeof(char),&bytes_copied) ;
+		temp[i] = (char *)kmalloc(ARG_MAX*sizeof(char)) ;
+		result = copyinstr((const userptr_t)args[i],temp[i],ARG_MAX*sizeof(char),&bytes_copied) ;
 		if (result)
 		{
 			return result ;
 		}
-
 		i++ ;
 	}
-
 	struct vnode *v;
 	vaddr_t entrypoint, stackptr;
-
 	result = vfs_open(kernel_pgm, O_RDONLY, 0, &v);
 	if (result) {
 		return result;
 	}
-
-
 	/* Create a new address space. */
+	//if (curthread->t_addrspace != NULL)
+	//{
+	//	struct page_table_entry * temp1 = curthread->t_addrspace->page_table ;
+	//	struct page_table_entry * temp2 ; //= as->page_table;
+	//	while(temp1!=NULL){
+	//		temp2=temp1;
+	//		temp1=temp1->next;
+	//		user_page_free(temp2->pa);
+	//		kfree(temp2);
+	//	}
+	//}
 	struct addrspace *addrspace_copy=curthread->t_addrspace;
 	curthread->t_addrspace = as_create();
 	if (curthread->t_addrspace==NULL) {
@@ -257,89 +254,65 @@ int execv(const char *program, char **args)
 		curthread->t_addrspace = addrspace_copy;
 		return ENOMEM;
 	}
-
 	as_activate(curthread->t_addrspace);
-
-
 	result = load_elf(v, &entrypoint);
 	if (result) {
 		vfs_close(v);
 		return result;
 	}
-
 	vfs_close(v);
-
-
 	result = as_define_stack(curthread->t_addrspace, &stackptr);
 	if (result) {
 		return result;
 	}
-
-
 	i = i -1 ;
 	vaddr_t index[25] ;
 	int k = 0 ;
-
 	while(i>= 0)
 	{
 		int length = strlen(temp[i]) ;
 		int num0 = (4 - (length % 4)) ;
-
 		int j = 0 ;
 		char *temp1 = (char *)kmalloc((length+num0)*sizeof(char)) ;
 		strcpy(temp1,temp[i]) ;
-
 		while(j<num0)
 		{
 			strcat(temp1,"\0") ;
 			j++ ;
 		}
-
 		stackptr = stackptr - ((length+num0)*sizeof(char)) ;
-
-
 		result = copyoutstr(temp1,(userptr_t) stackptr,(length+num0)*sizeof(char),&bytes_copied) ;
 		if (result)
 		{
 			return result ;
 		}
-
 		index[k] = (vaddr_t )stackptr;
 		k++ ;
-
 		i-- ;
 		kfree(temp1) ;
 	}
-
 	i = 0 ;
-
 	stackptr = stackptr - sizeof(int) ;
 	stackptr = stackptr - sizeof(int) ;
 	k-- ;
 	while(i<=k)
 	{
-
 		result = copyout(&index[i],(userptr_t) stackptr,sizeof(int)) ;
 		if (result)
 		{
 			return result ;
 		}
-
 		i++ ;
 		if (i<=k){
-		stackptr = stackptr - sizeof(int) ;
+			stackptr = stackptr - sizeof(int) ;
 		}
-
 	}
 	kfree(temp) ;
 	kfree(kernel_pgm) ;
-
 	enter_new_process(argc,(userptr_t) stackptr , stackptr, entrypoint);
-
 	panic("enter_new_process returned\n");
 	return EINVAL;
-
-}
+}																																																																																																    
 
 pid_t wait_pid(pid_t pid, int *status, int options){
 	options = 0 ;

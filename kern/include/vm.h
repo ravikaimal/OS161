@@ -86,7 +86,7 @@ void update_pagetable_entry(struct coremap *swap_coremap,off_t offset) ;
 paddr_t swap_in(off_t offset) ;
 paddr_t swap_out(int flag) ;
 paddr_t swap_kpages(int npages) ;
-int64_t write_to_swap(vaddr_t page) ;
+int64_t write_to_swap(vaddr_t page,off_t) ;
 int read_from_disk(vaddr_t page,off_t offset) ;
 
 
