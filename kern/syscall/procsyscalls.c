@@ -189,33 +189,47 @@ int execv(const char *program, char **args)
 
 	if (result )
 	{
+		kfree(kernel_pgm);
 		return result ;
 	}
 
 	if (strlen(kernel_pgm) == 0)
 	{
+		kfree(kernel_pgm);
 		return EINVAL ;
 	}
 	if (strlen(kernel_pgm) >= __PATH_MAX)
 	{
+		kfree(kernel_pgm);
 		return ENAMETOOLONG ;
 	}
 	int argc = 0 ;
 	if (args == NULL)
 	{
+		kfree(kernel_pgm);
 		return EFAULT ;
 	}
-	while(args[argc]!=NULL)							//while (true)
+	char *test = (char *)kmalloc(ARG_MAX*sizeof(char));
+	result = copyinstr((const userptr_t)args,test,ARG_MAX*sizeof(char),&bytes_copied) ;
+	if(result){
+		kfree(test);
+		kfree(kernel_pgm);
+		return EFAULT;
+	}
+	while(args[argc]!=NULL)						//while(true)
 	{
 		char *temp = (char *)kmalloc(ARG_MAX*sizeof(char)) ;
 		result = copyinstr((const userptr_t)args[argc],temp,ARG_MAX*sizeof(char),&bytes_copied) ;
 		if (result)
 		{
-			break ;
+			kfree(temp);
+			kfree(kernel_pgm);
+			return EFAULT;
 		}
 		argc++ ;
 		kfree(temp) ;
 	}
+	
 	char **temp = (char **)kmalloc(argc*sizeof(char *)) ;
 	
 	int i = 0 ;
@@ -225,7 +239,7 @@ int execv(const char *program, char **args)
 		result = copyinstr((const userptr_t)args[i],temp[i],ARG_MAX*sizeof(char),&bytes_copied) ;
 		if (result)
 		{
-			return result ;
+			return EFAULT ;//result ;
 		}
 		i++ ;
 	}

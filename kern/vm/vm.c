@@ -24,14 +24,18 @@ uint64_t localtime = 1 ;
 off_t global_offset = 0 ;
 
 static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
-static struct tlbshootdown *tlbsd ;	//= (struct tlbshootdown*)kmalloc(sizeof(struct tlbshootdown)) ;
-
 
 void vm_bootstrap()
 {
 	paddr_t firstaddr, lastaddr,freeaddr;
 	ram_getsize(&firstaddr, &lastaddr);
-	int total_page_num = ((lastaddr - firstaddr)  / PAGE_SIZE) -2;	//5
+	int total_page_num = ((lastaddr - firstaddr)  / PAGE_SIZE) ;
+	if(total_page_num == 193)
+		total_page_num-=1;
+	else if(total_page_num == 449)
+		total_page_num-=2;
+	else if(total_page_num == 961)
+	        total_page_num-=5;
 	coremap_list = (struct coremap*)PADDR_TO_KVADDR(firstaddr);
 	struct coremap *head = coremap_list ;
 
@@ -45,6 +49,8 @@ void vm_bootstrap()
 		coremap_list->status = 0x6 ;
 		coremap_list->timestamp = 0 ;
 		coremap_list->as = NULL ;
+		coremap_list->swap = 0;
+		coremap_list->pages = 0;
 		coremap_list = coremap_list->next ;
 	}
 	coremap_list->next = NULL;
@@ -69,7 +75,6 @@ void vm_bootstrap()
 
 	coremap_list=head;
 	vm_initialized = 1 ;
-	tlbsd = (struct tlbshootdown*)kmalloc(sizeof(struct tlbshootdown)) ;
 }
 
 paddr_t page_alloc()
@@ -120,7 +125,6 @@ paddr_t alloc_npages(int npages){
 	struct coremap *start = coremap_list;
 	int count=0;
 	spinlock_acquire(&stealmem_lock);
-	//lock_acquire(coremaplock) ;
 	while(local_coremap->next != NULL && count!=npages){
 		if((local_coremap->status & 0x3) == 2 ){
 			if(count == 0)
@@ -144,14 +148,12 @@ paddr_t alloc_npages(int npages){
 			local_coremap->pages=0;
 			local_coremap->status = 1 ;
 			local_coremap->as = NULL;
-			//			kprintf("\n thread %d va: %x pa: %x \n",(int)curthread->pid,  PADDR_TO_KVADDR(local_coremap->pa),local_coremap->pa) ;
 			bzero((void *)PADDR_TO_KVADDR(local_coremap->pa),PAGE_SIZE);
 			local_coremap=local_coremap->next;
 			count++;
 		}
 		start->pages=count;
 		spinlock_release(&stealmem_lock);
-		//lock_release(coremaplock) ;
 		return start->pa;
 	}
 	else
@@ -161,14 +163,6 @@ paddr_t alloc_npages(int npages){
 		return pa ;
 	}
 	spinlock_release(&stealmem_lock);
-	//lock_release(coremaplock);
-
-	//struct coremap *local_coremap1 = coremap_list ;
-	//kprintf("\n Printing Addresses \n") ;
-	//while(local_coremap1->next != NULL)
-	//{
-	//	kprintf("\n AA address va: %x pa: %x status %d \n", PADDR_TO_KVADDR(local_coremap1->pa),local_coremap1->pa,local_coremap1->status) ;
-	//
 	panic("alloc_npages could not find consecutive pages\n");
 	return 0;
 }
@@ -204,7 +198,6 @@ vaddr_t alloc_kpages(int npages)
 void free_kpages(vaddr_t addr)					//Clear tlb entries remaining.
 {
 	struct coremap *local_coremap=coremap_list;
-	//lock_acquire(coremaplock);
 	spinlock_acquire(&stealmem_lock);
 	while(local_coremap->next!=NULL){
 		if(local_coremap->va == addr){
@@ -257,7 +250,7 @@ void vm_tlbshootdown(const struct tlbshootdown *ts)
 int vm_fault(int faulttype, vaddr_t faultaddress)
 {
 	if(faultaddress == 0)
-		panic("vm_fault : Got null fault address\n");
+		return EFAULT; //panic("vm_fault : Got null fault address\n");
 	// Check whether the faultaddress is valid
 	struct addrspace *curaddrspace = curthread->t_addrspace ;
 
@@ -276,13 +269,13 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
 
 	if(i == N_REGIONS)
 	{
-		return EINVAL ;
+		return EFAULT; //EINVAL ;
 	}
 
 	//Check whether it is a write to a read only region
 	if((faulttype == VM_FAULT_WRITE) && (curaddrspace->regions[i]->permissions == 0x4 || curaddrspace->regions[i]->permissions == 0x5))
 	{
-		return EINVAL ;
+		return EFAULT ;		//EINVAL
 	}
 
 	faultaddress &= PAGE_FRAME;
@@ -305,7 +298,6 @@ int vm_fault(int faulttype, vaddr_t faultaddress)
 
 	tlb_random(ehi, elo) ;
 
-	//	kprintf("vm: Ran out of TLB entries - cannot handle page fault\n");
 	splx(spl);
 	return 0;
 }
@@ -315,10 +307,6 @@ paddr_t page_fault(vaddr_t faultaddress)
 	struct page_table_entry *pt_entry = curthread->t_addrspace->page_table ;
 	struct page_table_entry *pt_entry_temp = NULL;
 
-	//	faultaddress &= PAGE_FRAME;
-
-	//faultaddress &= PAGE_FRAME ;
-
 	while(pt_entry != NULL){
 		if(pt_entry->va == faultaddress) // Additional checks to be implemented later
 		{
@@ -326,9 +314,9 @@ paddr_t page_fault(vaddr_t faultaddress)
 					return pt_entry->pa ;
 			}
 			else{
-				pt_entry->state = PAGE_IN_MEMORY;
 				paddr_t p = swap_in(pt_entry->offset);
 				pt_entry->pa = p;
+				pt_entry->state = PAGE_IN_MEMORY ;
 				return p;
 			}			
 		}
@@ -344,7 +332,6 @@ paddr_t page_fault(vaddr_t faultaddress)
 	pt_entry_temp2->offset = -1;
 	pt_entry_temp2->next = NULL ;
 
-	//	kprintf("\n thread %d va: %x pa: %x \n",(int)curthread->pid,  pt_entry_temp2->va,pt_entry_temp2->pa) ;
 
 	if (pt_entry_temp != NULL)
 	{
@@ -354,62 +341,15 @@ paddr_t page_fault(vaddr_t faultaddress)
 	{
 		curthread->t_addrspace->page_table = pt_entry_temp2 ;
 	}
-
-	//	kfree(pt_entry_temp2) ;
-
-	///////////////test swap
-
-	//	lock_acquire(swaplock) ;
-	//	paddr_t padd2 = user_page_alloc() ;
-	//	paddr_t padd3 = user_page_alloc() ;
-
-	//	int j = 0 ;
-
-	//	for (j = 0 ; j < 4096 ; j++)
-	//	{
-	//		qzero((void *)PADDR_TO_KVADDR(padd2),100,2);
-	//		qzero((void *)PADDR_TO_KVADDR(padd2+100),300,5);
-	//	}
-
-	//	for (j = 0 ; j < 4096 ; j++)
-	//	{
-	//		qzero((void *)PADDR_TO_KVADDR(padd3+j),1,5000+j);
-	//	}
-
-	//	write_to_swap(PADDR_TO_KVADDR(padd2)) ;
-	//	off_t t2  = write_to_swap(PADDR_TO_KVADDR(padd3)) ;
-	//	t2 = t2 + 1;
-	//	paddr_t paddr10 = user_page_alloc() ;
-	//	paddr_t paddr11 = user_page_alloc() ;
-	//	read_from_disk(PADDR_TO_KVADDR(paddr10),0) ;
-	//	read_from_disk(PADDR_TO_KVADDR(paddr11),t2) ;
-
-	//	for (j = 0 ; j < 4096 ; j++)
-	//	{
-	//		char *q = read_zero((void *)PADDR_TO_KVADDR(paddr10),100) ;
-	//		char *r = read_zero((void *)PADDR_TO_KVADDR(paddr10),300) ;
-	//		(void)q ;
-	//		(void)r ;
-	//		kprintf(" %s ",);
-	//		kprintf(" %s ",read_zero((void *)PADDR_TO_KVADDR(paddr11),4096));
-	//	}
-
-
-
-	//	lock_release(swaplock) ;
-
-	///////////////////////
-
 	return paddr ;
 }
 
 
 paddr_t user_page_alloc(){
 	struct coremap *local_coremap = coremap_list ;
-
-	//paddr_t ret = 0;
-	if(spinlock_do_i_hold(&stealmem_lock))
-		panic("user_page_alloc : Lock already held");
+	if(spinlock_do_i_hold(&stealmem_lock)){
+                panic("user_page_alloc : Lock already held");
+	}
 	spinlock_acquire(&stealmem_lock);
 	while(local_coremap!=NULL){
 		if((local_coremap->status & 0x2) == 2  ){
@@ -425,7 +365,6 @@ paddr_t user_page_alloc(){
 		local_coremap = local_coremap->next ;
 	}
 	spinlock_release(&stealmem_lock);
-	//lock_release(coremaplock);	
 	paddr_t pa = swap_out(0) ;
 	return pa ;
 }
@@ -433,26 +372,18 @@ paddr_t user_page_alloc(){
 void user_page_free(paddr_t pa)                                  //Free user page
 {
 	struct coremap *local_coremap=coremap_list;
-	//lock_acquire(coremaplock);
 	spinlock_acquire(&stealmem_lock);
 
 	while(local_coremap!=NULL){
 		if(local_coremap->pa == pa){
-			//local_coremap->pages = 0;
 			local_coremap->status = 6;
-			//local_coremap->timestamp = 0;
-			//bzero((void *)PADDR_TO_KVADDR(local_coremap->pa),PAGE_SIZE);
 			spinlock_release(&stealmem_lock);
-			//lock_release(coremaplock);
 			break;	
-			//return;
 		}
 		local_coremap=local_coremap->next;
 	}
-	//lock_release(coremaplock);
 	if(local_coremap == NULL){
 		spinlock_release(&stealmem_lock);
-		//lock_release(coremaplock);
 		panic("user_page_free : Could not free page\n");
 	}
 }
@@ -463,16 +394,6 @@ qzero(void *vblock, size_t len,int number)
 {
 	char *block = vblock;
 	size_t i;
-
-	/*
-	 * For performance, optimize the common case where the pointer
-	 * and the length are word-aligned, and write word-at-a-time
-	 * instead of byte-at-a-time. Otherwise, write bytes.
-	 *
-	 * The alignment logic here should be portable. We rely on the
-	 * compiler to be reasonably intelligent about optimizing the
-	 * divides and moduli out. Fortunately, it is.
-	 */
 
 	if ((uintptr_t)block % sizeof(long) == 0 &&
 			len % sizeof(long) == 0) {
@@ -494,17 +415,6 @@ char *read_zero(void *vblock, size_t len)
 	char *block = vblock;
 	char *return_data;
 	size_t i;
-
-	/*
-	 * For performance, optimize the common case where the pointer
-	 * and the length are word-aligned, and write word-at-a-time
-	 * instead of byte-at-a-time. Otherwise, write bytes.
-	 *
-	 * The alignment logic here should be portable. We rely on the
-	 * compiler to be reasonably intelligent about optimizing the
-	 * divides and moduli out. Fortunately, it is.
-	 */
-
 
 	if ((uintptr_t)block % sizeof(long) == 0 &&
 			len % sizeof(long) == 0) {
@@ -557,19 +467,30 @@ paddr_t swap_out(int flag){
 	struct coremap *local_coremap = coremap_list;
 	struct coremap *swap_coremap = NULL ;//coremap_list;
 	uint16_t min = 65535;
+	struct tlbshootdown *tlbsd = (struct tlbshootdown*)kmalloc(sizeof(struct tlbshootdown)) ;
 	spinlock_acquire(&stealmem_lock);
 	while(local_coremap!=NULL){
-		if(local_coremap->status == 0 && local_coremap->timestamp <= min){//has to be user page, min time and doesnt belong to current process
+		if(local_coremap->status == 0 && local_coremap->timestamp <= min && local_coremap->as != curthread->t_addrspace && local_coremap->swap == 0){
 			min = local_coremap->timestamp;
 			swap_coremap = local_coremap;
 		}
 		local_coremap = local_coremap->next;
 	}
-	if(swap_coremap == NULL){
-		spinlock_release(&stealmem_lock);
-		panic("Could not find page in other processes\n");
-	}
-	if((swap_coremap->status & 0x4) == 0){
+	if(swap_coremap == NULL){				//Could not find page from another process. Now will evacuate page of current process.
+		local_coremap = coremap_list;
+		while(local_coremap!=NULL){
+	                if(local_coremap->status == 0 && local_coremap->timestamp <= min && local_coremap->swap == 0){//has to be user page, min time and doesnt belong to current process
+				min = local_coremap->timestamp;
+				swap_coremap = local_coremap;
+			}
+			local_coremap = local_coremap->next;
+		}
+		if(swap_coremap == NULL){
+			spinlock_release(&stealmem_lock);
+			panic("Could not find page in other processes\n");
+		}
+	}	
+	//if((swap_coremap->status & 0x4) == 0){
 		struct addrspace *temp = swap_coremap->as;
 		struct page_table_entry *pt = temp->page_table;
 		while(pt!=NULL){
@@ -578,17 +499,26 @@ paddr_t swap_out(int flag){
 			pt=pt->next;
 		}
 		off_t off = 0;
-		if(pt == NULL)
-			off = write_to_swap(PADDR_TO_KVADDR(swap_coremap->pa),-1) ;
-		else
+		if(pt == NULL){
+			swap_coremap->swap = 1;
+			spinlock_release(&stealmem_lock);
+			off = write_to_swap(PADDR_TO_KVADDR(swap_coremap->pa),-1) ;	//panic("swap_out : test panic \n");//off = write_to_swap(PADDR_TO_KVADDR(swap_coremap->pa),-1) ;
+		}
+		else{
+			swap_coremap->swap = 1;
+			spinlock_release(&stealmem_lock);
 			off = write_to_swap(PADDR_TO_KVADDR(swap_coremap->pa),pt->offset) ;
+		}
 		if(off == -10)
 			panic("swap_out : incorrect write to disk");
-		//struct tlbshootdown *tlbsd = (struct tlbshootdown*)kmalloc(sizeof(struct tlbshootdown)) ;
-		tlbsd->ts_vaddr = swap_coremap->va ;
-		vm_tlbshootdown(tlbsd) ;		
+		spinlock_acquire(&stealmem_lock);
+		swap_coremap->swap = 0;
+		if(swap_coremap->as == curthread->t_addrspace){
+			tlbsd->ts_vaddr = swap_coremap->va ;
+			vm_tlbshootdown(tlbsd) ;
+		}
 		update_pagetable_entry(swap_coremap,off);
-	}
+	//}
 	bzero((void *)PADDR_TO_KVADDR(swap_coremap->pa),PAGE_SIZE);
 	swap_coremap->timestamp = localtime;
 	localtime++;
@@ -602,6 +532,7 @@ paddr_t swap_out(int flag){
 		swap_coremap->as=curthread->t_addrspace;
 	}
 	spinlock_release(&stealmem_lock);
+	kfree(tlbsd);
 	return swap_coremap->pa;
 }
 

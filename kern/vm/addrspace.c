@@ -309,7 +309,7 @@ as_define_stack(struct addrspace *as, vaddr_t *stackptr)
 	as->regions[i]=(struct region *)kmalloc(sizeof(struct region ));
 	as->regions[i]->region_start= USERSTACK - 4096*4 ;
 	as->regions[i]->permissions=6;
-	as->regions[i]->npages = 4 ;
+	as->regions[i]->npages = 4;
 //	as->regions[i]->region_end  = USERSTACK ;
 
 	/* Initial user-level stack pointer */

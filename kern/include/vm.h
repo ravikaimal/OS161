@@ -58,6 +58,7 @@ struct coremap {
     short status ;
     uint16_t timestamp;
     short pages;		//number if continuous pages allocated
+    short swap;
     struct coremap *next;
 }*coremap_list;
 
