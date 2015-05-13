@@ -23,7 +23,8 @@
 pid_t sys_fork(struct trapframe *tf)
 {
 	struct trapframe *newtrapframe =kmalloc(sizeof(struct trapframe ));
-	memcpy(newtrapframe,tf ,sizeof(struct trapframe ));
+	*newtrapframe = *tf;
+	//memcpy(newtrapframe,tf ,sizeof(struct trapframe ));
 	int result ;
 
 	struct addrspace *newaddrspace;
@@ -56,15 +57,9 @@ void child_process_entry(void *data1, unsigned long data2)
 
 	as_activate(curthread->t_addrspace) ;
 
-	//struct page_table_entry *page_table_temp2 = curthread->t_addrspace->page_table ;
-
-	//while(page_table_temp2 != NULL){
-	//	page_table_temp2 = page_table_temp2->next ;
-	//}
-
 	struct trapframe usertf ;
-
-	memcpy(&usertf,tf ,sizeof(struct trapframe ));
+	usertf = *tf;
+	//memcpy(&usertf,tf ,sizeof(struct trapframe ));
 	usertf.tf_v0 = 0 ;
 	usertf.tf_a3 = 0 ;
 	usertf.tf_epc += 4 ;
@@ -189,47 +184,33 @@ int execv(const char *program, char **args)
 
 	if (result )
 	{
-		kfree(kernel_pgm);
 		return result ;
 	}
 
 	if (strlen(kernel_pgm) == 0)
 	{
-		kfree(kernel_pgm);
 		return EINVAL ;
 	}
 	if (strlen(kernel_pgm) >= __PATH_MAX)
 	{
-		kfree(kernel_pgm);
 		return ENAMETOOLONG ;
 	}
 	int argc = 0 ;
 	if (args == NULL)
 	{
-		kfree(kernel_pgm);
 		return EFAULT ;
 	}
-	char *test = (char *)kmalloc(ARG_MAX*sizeof(char));
-	result = copyinstr((const userptr_t)args,test,ARG_MAX*sizeof(char),&bytes_copied) ;
-	if(result){
-		kfree(test);
-		kfree(kernel_pgm);
-		return EFAULT;
-	}
-	while(args[argc]!=NULL)						//while(true)
+	while(args[argc]!=NULL)							//while (true)
 	{
 		char *temp = (char *)kmalloc(ARG_MAX*sizeof(char)) ;
 		result = copyinstr((const userptr_t)args[argc],temp,ARG_MAX*sizeof(char),&bytes_copied) ;
 		if (result)
 		{
-			kfree(temp);
-			kfree(kernel_pgm);
-			return EFAULT;
+			break ;
 		}
 		argc++ ;
 		kfree(temp) ;
 	}
-	
 	char **temp = (char **)kmalloc(argc*sizeof(char *)) ;
 	
 	int i = 0 ;
@@ -239,7 +220,7 @@ int execv(const char *program, char **args)
 		result = copyinstr((const userptr_t)args[i],temp[i],ARG_MAX*sizeof(char),&bytes_copied) ;
 		if (result)
 		{
-			return EFAULT ;//result ;
+			return result ;
 		}
 		i++ ;
 	}
@@ -262,6 +243,11 @@ int execv(const char *program, char **args)
 	//	}
 	//}
 	struct addrspace *addrspace_copy=curthread->t_addrspace;
+	if(curthread->t_addrspace != NULL){
+		as_destroy(curthread->t_addrspace);
+		curthread->t_addrspace = NULL;
+	}
+	//struct addrspace *addrspace_copy=curthread->t_addrspace;
 	curthread->t_addrspace = as_create();
 	if (curthread->t_addrspace==NULL) {
 		vfs_close(v);
