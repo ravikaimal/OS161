@@ -44,12 +44,13 @@
 #include <threadprivate.h>
 #include <current.h>
 #include <synch.h>
-#include <addrspace.h>
+//#include <addrspace.h>
 #include <mainbus.h>
 #include <kern/fcntl.h>
 #include <vfs.h>
 #include <vnode.h>
 #include <limits.h>
+#include <vm.h>
 
 #include "opt-synchprobs.h"
 #include "opt-defaultscheduler.h"
