@@ -200,17 +200,24 @@ int execv(const char *program, char **args)
 	{
 		return EFAULT ;
 	}
-	while(args[argc]!=NULL)							//while (true)
-	{
-		char *temp = (char *)kmalloc(ARG_MAX*sizeof(char)) ;
-		result = copyinstr((const userptr_t)args[argc],temp,ARG_MAX*sizeof(char),&bytes_copied) ;
-		if (result)
-		{
-			break ;
-		}
-		argc++ ;
-		kfree(temp) ;
-	}
+	char *temp1 = (char *)kmalloc(ARG_MAX*sizeof(char)) ;
+        result = copyinstr((const userptr_t)args,temp1,ARG_MAX*sizeof(char),&bytes_copied) ;
+        if(result){
+                return result;
+        }
+        kfree(temp1);
+    while(args[argc]!=NULL)                                                 //while (true)
+    {
+     	char *temp = (char *)kmalloc(ARG_MAX*sizeof(char)) ;
+        result = copyinstr((const userptr_t)args[argc],temp,ARG_MAX*sizeof(char),&bytes_copied) ;
+        if (result)
+        	{
+            	kfree(temp);
+                return EFAULT ;//break ;
+            }
+            argc++ ;
+            kfree(temp) ;
+        }
 	char **temp = (char **)kmalloc(argc*sizeof(char *)) ;
 	
 	int i = 0 ;
@@ -230,18 +237,7 @@ int execv(const char *program, char **args)
 	if (result) {
 		return result;
 	}
-	/* Create a new address space. */
-	//if (curthread->t_addrspace != NULL)
-	//{
-	//	struct page_table_entry * temp1 = curthread->t_addrspace->page_table ;
-	//	struct page_table_entry * temp2 ; //= as->page_table;
-	//	while(temp1!=NULL){
-	//		temp2=temp1;
-	//		temp1=temp1->next;
-	//		user_page_free(temp2->pa);
-	//		kfree(temp2);
-	//	}
-	//}
+
 	struct addrspace *addrspace_copy=curthread->t_addrspace;
 	if(curthread->t_addrspace != NULL){
 		as_destroy(curthread->t_addrspace);

@@ -34,6 +34,7 @@
 #include <vm.h>
 #include <spl.h>
 #include <mips/tlb.h>
+ #include <synch.h>
 
 
 /*
@@ -99,20 +100,8 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 //	struct page_table_entry *page_table_start = NULL ;
 	while(page_table_temp != NULL ){
 		page_table_temp3 = page_table_temp2 ;
-//		if (page_table_temp2 != NULL)
-//		{
-//			kfree(page_table_temp2) ;
-//		}
 		page_table_temp2 = (struct page_table_entry*)kmalloc(sizeof(struct page_table_entry)) ;
-		page_table_temp2->pa = user_page_alloc() ;
-//		page_table_temp2->va = PADDR_TO_KVADDR(page_table_temp2->pa) ;
-		memmove((void *)PADDR_TO_KVADDR(page_table_temp2->pa),(const void *)PADDR_TO_KVADDR(page_table_temp->pa),PAGE_SIZE);
-		page_table_temp2->va = page_table_temp->va ;
-		page_table_temp2->state = page_table_temp->state ;
-		page_table_temp2->offset = page_table_temp->offset;
 		page_table_temp2->next = NULL;
-
-
 		if(page_table_temp3 != NULL)
 		{
 			page_table_temp3->next = page_table_temp2 ;
@@ -123,12 +112,28 @@ as_copy(struct addrspace *old, struct addrspace **ret)
 		}
 
 		page_table_temp = page_table_temp->next ;
-
 	}
 	page_table_temp2->next = NULL;
-//	kfree(page_table_temp2) ;
-//	newas->page_table = page_table_start
-
+	page_table_temp = old->page_table ;
+	page_table_temp2 = newas->page_table;
+	lock_acquire(coremap_lock);
+	while(page_table_temp != NULL && page_table_temp2!=NULL){
+		page_table_temp2->pa = user_page_alloc() ;
+		if(page_table_temp->state == 0){
+			memmove((void *)PADDR_TO_KVADDR(page_table_temp2->pa),(const void *)PADDR_TO_KVADDR(page_table_temp->pa),PAGE_SIZE);
+		}
+		else{
+			page_table_temp->pa = swap_in(page_table_temp->offset);
+			page_table_temp->state = 0;
+			memmove((void *)PADDR_TO_KVADDR(page_table_temp2->pa),(const void *)PADDR_TO_KVADDR(page_table_temp->pa),PAGE_SIZE);
+		}
+		page_table_temp2->va = page_table_temp->va ;
+		page_table_temp2->state = 0 ;
+		page_table_temp2->offset = -1 ;
+		page_table_temp2=page_table_temp2->next;
+		page_table_temp = page_table_temp->next ;
+	}
+	lock_release(coremap_lock);
 	*ret = newas;
 	return 0;
 }
@@ -139,35 +144,25 @@ as_destroy(struct addrspace *as)
 	/*
 	 * Clean up as needed.
 	 */
-	//We should free the pages as well.	
+	//We should free the pages as well.
 	int i = 0 ;
 	for(i = 0 ; i < N_REGIONS ; i++)
 	{
 		kfree(as->regions[i]) ;
 	}
-	
+
+	lock_acquire(coremap_lock);
 	struct page_table_entry * temp1 = as->page_table ;
 	struct page_table_entry * temp2 ; //= as->page_table;
 
 	while(temp1!=NULL){
 		temp2=temp1;
 		temp1=temp1->next;
-		user_page_free(temp2->pa);
-		kfree(temp2);
+		if(temp2->state != 1)
+			user_page_free(temp2->pa);
+		//kfree(temp2);
 	}
-	//while(temp2 != NULL /*&& temp1->next != NULL&& temp1->next != (void*)0xdeadbeef*/)
-	//{
-	//	if(temp1->next == NULL){
-	//		user_page_free(temp1->pa);
-	//		kfree(temp1);
-	//		break;
-	//	}
-	//	temp2 = temp1->next ;
-	//	user_page_free(temp1->pa);
-	//	kfree(temp1) ;
-	//	temp1 = temp2 ;
-	//}
-
+	lock_release(coremap_lock);
 	kfree(as);
 }
 
@@ -209,7 +204,7 @@ as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
 		panic("as_define_region - Cannot find NULL region\n");
 		return EUNIMP;
 	}
-	 
+
 	size_t npages;
 	/* Align the region. First, the base... */
 	sz += vaddr & ~(vaddr_t)PAGE_FRAME;

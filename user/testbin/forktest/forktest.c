@@ -154,6 +154,8 @@ test(int nowait)
 	putchar('3');
 	check();
 
+//	(void)pid2 ;
+	(void)pid3 ;
 	/*
 	 * These must be called in reverse order to avoid waiting
 	 * improperly.

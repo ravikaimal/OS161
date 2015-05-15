@@ -200,16 +200,11 @@ off_t sys_lseek(userptr_t arg1,userptr_t arg2,userptr_t arg3,userptr_t arg4)
 	int pos2 = (int)arg3 ;
 	int *whence_address = (int*)arg4 ;
 	int whence=*whence_address;
-//	kprintf("\nsys_lseek : whence %d\n",whence);
 	off_t pos = 0 | pos1 ;
 	pos = pos << 32 | pos2 ;
 
 	if(curthread->fd[userfd] == NULL){
 		return EBADF;
-	}
-	if (userfd != 1 && userfd != 2 )
-	{
-		//		kprintf("\n sys_lseek: After curthread->fd[userfd] == NULL ") ;
 	}
 	if(whence!=SEEK_SET && whence!=SEEK_CUR && whence!=SEEK_END){
 		return EINVAL;
@@ -223,12 +218,6 @@ off_t sys_lseek(userptr_t arg1,userptr_t arg2,userptr_t arg3,userptr_t arg4)
 	lock_acquire(curthread->fd[userfd]->lock);
 	struct stat buffr ;
 	int stat_result ;
-
-	if (userfd != 1 && userfd != 2 )
-	{
-		//		kprintf("\n sys_lseek: SEEK POSITION %d ",whence) ;
-	}
-
 
 	switch(whence)
 	{
@@ -247,14 +236,6 @@ off_t sys_lseek(userptr_t arg1,userptr_t arg2,userptr_t arg3,userptr_t arg4)
 		offset=pos+curthread->fd[userfd]->offset;
 		break;
 	case SEEK_END:
-		//		if (pos+curthread->fd[userfd]->offset < 0)
-		//		{
-		//			return EINVAL ;
-		//		}
-		if (userfd != 1 && userfd != 2 )
-		{
-			//			kprintf("\n sys_lseek : file stat\n") ;
-		}
 		stat_result = VOP_STAT(curthread->fd[userfd]->vnode, &buffr);
 		if (stat_result != 0)
 		{
@@ -278,7 +259,6 @@ off_t sys_lseek(userptr_t arg1,userptr_t arg2,userptr_t arg3,userptr_t arg4)
 	lock_release(curthread->fd[userfd]->lock);
 	return -offset;
 }
-//How to handle seek past end end of file
 
 int sys_dup2(userptr_t userpointer1,userptr_t userpointer2){
 	int oldfd = (int)userpointer1;
@@ -310,9 +290,6 @@ int sys_dup2(userptr_t userpointer1,userptr_t userpointer2){
 }
 
 
-//is lock needed?
-//How to check if process limit was reached??
-
 int sys_close(userptr_t userpointer)
 {
 
@@ -331,14 +308,11 @@ int sys_close(userptr_t userpointer)
 
 	lock_acquire(curthread->fd[userfd]->reflock) ;
 
-//	kprintf("\nsys_close ---: userfd %d    %d\n ",userfd,curthread->fd[userfd]->referenceCount) ;
 	if(curthread->fd[userfd]->referenceCount == 1)
 	{
 		if (curthread->fd[userfd]->vnode != NULL && curthread->fd[userfd]->vnode->vn_opencount > 0)
 		{
-//			kprintf("\nsys_close 1: open count %d\n ",curthread->fd[userfd]->vnode->vn_opencount) ;
 			struct vnode *vnode1 = curthread->fd[userfd]->vnode ;
-//			kprintf("\nsys_close 2: open count %d\n ",vnode1->vn_opencount) ;
 			vfs_close(vnode1) ;
 		}
 		lock_release(curthread->fd[userfd]->reflock) ;

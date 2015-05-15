@@ -78,6 +78,8 @@ static const int right_answers[NJOBS] = {
 	364554240,
 };
 
+
+
 ////////////////////////////////////////////////////////////
 
 struct matrix {

@@ -35,7 +35,7 @@
  */
 
 
-#include <vm.h>
+
 #include "opt-dumbvm.h"
 
 struct vnode;

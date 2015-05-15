@@ -1,4 +1,4 @@
-/*
+struct lock *coremap_lock;/*
  * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2008, 2009
  *	The President and Fellows of Harvard College.
  *
@@ -38,7 +38,7 @@
 
 
 #include <machine/vm.h>
-
+#include <addrspace.h>
 /* Fault-type arguments to vm_fault() */
 #define VM_FAULT_READ        0    /* A read was attempted */
 #define VM_FAULT_WRITE       1    /* A write was attempted */
@@ -62,7 +62,7 @@ struct coremap {
     struct coremap *next;
 }*coremap_list;
 
-
+struct lock *coremap_lock;
 /* Initialization function */
 void vm_bootstrap(void);
 paddr_t page_alloc(void);
@@ -79,9 +79,8 @@ void vm_tlbshootdown_all(void);
 void vm_tlbshootdown(const struct tlbshootdown *);
 paddr_t user_page_alloc(void) ;
 void user_page_free(paddr_t); 
-paddr_t page_fault(vaddr_t faultaddress) ;
-void
-qzero(void *vblock, size_t len,int number) ;
+paddr_t page_fault(vaddr_t faultaddress,struct page_table_entry *) ;
+void qzero(void *vblock, size_t len,int number) ;
 char *read_zero(void *vblock, size_t len) ;
 void update_pagetable_entry(struct coremap *swap_coremap,off_t offset) ;
 paddr_t swap_in(off_t offset) ;
